@@ -3,6 +3,7 @@ __pycache__
 planner_*.th
 planner.th
 
+drive_data/
 Styles/
 *.pdf
 !report/report.pdf
