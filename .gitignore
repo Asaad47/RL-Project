@@ -1,0 +1,16 @@
+__pycache__
+.DS_Store
+planner_*.th
+planner.th
+
+Styles/
+*.pdf
+!report/report.pdf
+
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
