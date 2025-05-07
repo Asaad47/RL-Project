@@ -96,8 +96,10 @@ class PyTux:
         if done:
             reward = 100000
             print(">>> arrived!")
+        elif current_vel < 1.0:
+            reward = -1
         else:
-            reward = (kart.overall_distance / track.length)
+            reward = (kart.overall_distance / track.length) * (current_vel / 30)
 
         return np.array(self.k.render_data[0].image), reward, done, last_rescue
 
@@ -124,12 +126,12 @@ IMG_SHAPE = (84, 84)
 
 # Action space
 STEER_VALUES = [0, -0.25, 0.25, -0.5, 0.5, -0.75, 0.75, -1, 1]  # 9 values
-ACCEL_VALUES = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]  # 10 values
+ACCEL_VALUES = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05]  # 11 values
 BRAKE_VALUES = [False, True]  # 2 values
 DRIFT_VALUES = [False, True]  # 2 values
 NITRO_VALUES = [True, False]  # 2 values
 
-# Total number of actions: 9 * 10 * 2 * 2 * 2 = 720
+# Total number of actions: 9 * 11 * 2 * 2 * 2 = 792
 NUM_ACTIONS = len(STEER_VALUES) * len(ACCEL_VALUES) * len(BRAKE_VALUES) * len(DRIFT_VALUES) * len(NITRO_VALUES)
 
 def get_action_from_index(action_idx):
@@ -219,7 +221,7 @@ def preprocess(img):
     return img.squeeze(0).numpy()  # Convert back to numpy for storage
 
 def get_epsilon(frame_idx):
-    return EPSILON_END + (EPSILON_START - EPSILON_END) * np.exp(-1. * frame_idx / EPSILON_DECAY)
+    return max(EPSILON_END + (EPSILON_START - EPSILON_END) * (1 - frame_idx / 1000), 0.1)
 
 def select_action(model, state, epsilon):
     if random.random() < epsilon:
@@ -319,7 +321,7 @@ if __name__ == "__main__":
                       help='Track to train/play on')
     parser.add_argument('--episodes', type=int, default=100,
                       help='Number of episodes for training')
-    parser.add_argument('--play_episodes', type=int, default=5,
+    parser.add_argument('--play_episodes', type=int, default=1,
                       help='Number of episodes for playing')
     parser.add_argument('--verbose', action='store_true',
                       help='Show verbose output during playing')
