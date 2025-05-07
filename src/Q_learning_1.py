@@ -63,7 +63,7 @@ class PyTux:
         
         return np.array(self.k.render_data[0].image), None
 
-    def step(self, action):
+    def step(self, action, t, last_rescue):
         if isinstance(action, int):
             # Convert action index to action dictionary
             action_dict = get_action_from_index(action)
@@ -82,7 +82,8 @@ class PyTux:
         current_vel = np.linalg.norm(kart.velocity)
         
         # Check if kart needs rescue
-        if current_vel < 1.0:
+        if current_vel < 1.0 and t - last_rescue > RESCUE_TIMEOUT:
+            last_rescue = t
             action.rescue = True
             self.k.step(action)
             state.update()
@@ -98,7 +99,7 @@ class PyTux:
         else:
             reward = (kart.overall_distance / track.length)
 
-        return np.array(self.k.render_data[0].image), reward, done, None
+        return np.array(self.k.render_data[0].image), reward, done, last_rescue
 
     def close(self):
         """
@@ -122,11 +123,11 @@ STATE_STACK = 4
 IMG_SHAPE = (84, 84)
 
 # Action space
-STEER_VALUES = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1]  # 9 values
-ACCEL_VALUES = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]  # 10 values
+STEER_VALUES = [0, -0.25, 0.25, -0.5, 0.5, -0.75, 0.75, -1, 1]  # 9 values
+ACCEL_VALUES = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]  # 10 values
 BRAKE_VALUES = [False, True]  # 2 values
 DRIFT_VALUES = [False, True]  # 2 values
-NITRO_VALUES = [False, True]  # 2 values
+NITRO_VALUES = [True, False]  # 2 values
 
 # Total number of actions: 9 * 10 * 2 * 2 * 2 = 720
 NUM_ACTIONS = len(STEER_VALUES) * len(ACCEL_VALUES) * len(BRAKE_VALUES) * len(DRIFT_VALUES) * len(NITRO_VALUES)
@@ -268,19 +269,23 @@ def play(model_path, track="zengarden", num_episodes=5, verbose=True):
 
     env = PyTux()
     
+    if verbose:
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(1, 1)
+    
     for episode in range(num_episodes):
         obs = env.reset(track)[0]
         state = preprocess(obs)
         state_stack = deque([state] * STATE_STACK, maxlen=STATE_STACK)
         episode_reward = 0
         steps = 0
-
+        last_rescue = 0
         while True:
             stacked_state = np.array(state_stack)
             # No exploration in play mode
             action_idx = select_action(model, stacked_state, epsilon=0)
             action_dict = get_action_from_index(action_idx)
-            obs, reward, done, _ = env.step(action_dict)
+            obs, reward, done, last_rescue = env.step(action_dict, steps, last_rescue)
             next_state = preprocess(obs)
             state_stack.append(next_state)
             
@@ -288,13 +293,18 @@ def play(model_path, track="zengarden", num_episodes=5, verbose=True):
             steps += 1
             
             if verbose:
-                print(f"Step {steps}: Action={action_dict}, Reward={reward:.2f}")
+                ax.clear()
+                ax.imshow(obs)
+                WH2 = np.array([env.config.screen_width, env.config.screen_height]) / 2
+                plt.pause(1e-3)
             
             if done or steps >= 1000:
                 break
         
         print(f"Episode {episode + 1}: Total Reward = {episode_reward:.2f}, Steps = {steps}")
     
+    if verbose:
+        plt.close()
     env.close()
 
 if __name__ == "__main__":
@@ -328,7 +338,6 @@ if __name__ == "__main__":
     
     if args.mode == 'train':
         # Training mode
-
         env = PyTux()
         model = DQN(NUM_ACTIONS).to(device)
         target_model = DQN(NUM_ACTIONS).to(device)
@@ -347,14 +356,15 @@ if __name__ == "__main__":
             state = preprocess(obs)
             state_stack = deque([state] * STATE_STACK, maxlen=STATE_STACK)
             episode_reward = 0
-
+            last_rescue = 0
+            
             for step in range(args.max_frames):
                 frame_idx += 1
                 stacked_state = np.array(state_stack)
                 epsilon = get_epsilon(frame_idx)
                 action_idx = select_action(model, stacked_state, epsilon)
                 action_dict = get_action_from_index(action_idx)
-                obs, reward, done, _ = env.step(action_dict)
+                obs, reward, done, last_rescue = env.step(action_dict, step, last_rescue)
                 next_state = preprocess(obs)
                 state_stack.append(next_state)
                 next_stacked = np.array(state_stack)
@@ -372,7 +382,6 @@ if __name__ == "__main__":
             print(f"Episode {episode}: reward = {episode_reward}")
             
             # Save model periodically
-            # TODO: save model every 100 episodes
             if episode % 10 == 0:
                 torch.save(model.state_dict(), args.model_path)
                 print(f"Model saved to {args.model_path}")
