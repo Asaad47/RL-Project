@@ -85,21 +85,18 @@ class PyTux:
         if current_vel < 1.0 and t - last_rescue > RESCUE_TIMEOUT:
             last_rescue = t
             action.rescue = True
-            self.k.step(action)
-            state.update()
-            track.update()
-            kart = state.players[0].kart
 
         done = np.isclose(kart.overall_distance / track.length, 1.0, atol=2e-3)
         
         # Calculate reward based on progress and speed
         if done:
-            reward = 100000
+            reward = 1000
             print(">>> arrived!")
-        elif current_vel < 1.0:
+        elif current_vel < 5.0:
             reward = -1
         else:
-            reward = (kart.overall_distance / track.length) * (current_vel / 30)
+            reward = 1
+            # reward = (kart.overall_distance / track.length)
 
         return np.array(self.k.render_data[0].image), reward, done, last_rescue
 
@@ -114,7 +111,7 @@ class PyTux:
 
 # Hyperparameters
 GAMMA = 0.99
-LEARNING_RATE = 0.00025
+LEARNING_RATE = 0.0025
 MEMORY_SIZE = 100_000
 BATCH_SIZE = 32
 TARGET_UPDATE = 1000
@@ -122,16 +119,16 @@ EPSILON_START = 1.0
 EPSILON_END = 0.1
 EPSILON_DECAY = 50000
 STATE_STACK = 4
-IMG_SHAPE = (84, 84)
+IMG_SHAPE = (128, 96)  # Original image size
 
 # Action space
-STEER_VALUES = [0, -0.25, 0.25, -0.5, 0.5, -0.75, 0.75, -1, 1]  # 9 values
-ACCEL_VALUES = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05]  # 11 values
+STEER_VALUES = [0, -1, 1]  # 3 values
+ACCEL_VALUES = [1.0, 0.5, 0.0]  # 3 values
 BRAKE_VALUES = [False, True]  # 2 values
 DRIFT_VALUES = [False, True]  # 2 values
 NITRO_VALUES = [True, False]  # 2 values
 
-# Total number of actions: 9 * 11 * 2 * 2 * 2 = 792
+# Total number of actions: 3 * 3 * 2 * 2 * 2 = 72
 NUM_ACTIONS = len(STEER_VALUES) * len(ACCEL_VALUES) * len(BRAKE_VALUES) * len(DRIFT_VALUES) * len(NITRO_VALUES)
 
 def get_action_from_index(action_idx):
@@ -188,21 +185,24 @@ class DQN(nn.Module):
     def __init__(self, num_actions):
         super(DQN, self).__init__()
         self.conv = nn.Sequential(
+            # Input: [batch_size, STATE_STACK, 128, 96]
             nn.Conv2d(STATE_STACK, 32, kernel_size=8, stride=4),
             nn.ReLU(),
+            # Output: [batch_size, 32, 31, 23]
             nn.Conv2d(32, 64, kernel_size=4, stride=2),
             nn.ReLU(),
+            # Output: [batch_size, 64, 14, 10]
             nn.Conv2d(64, 64, kernel_size=3, stride=1),
             nn.ReLU()
+            # Output: [batch_size, 64, 12, 8]
         )
         self.fc = nn.Sequential(
-            nn.Linear(7 * 7 * 64, 512),
+            nn.Linear(64 * 12 * 8, 512),
             nn.ReLU(),
             nn.Linear(512, num_actions)
         )
 
     def forward(self, x):
-        # x shape: [batch_size, channels, height, width]
         x = self.conv(x)
         x = x.view(x.size(0), -1)
         return self.fc(x)
@@ -212,9 +212,8 @@ def preprocess(img):
     if isinstance(img, np.ndarray):
         img = Image.fromarray(img)
     
-    # Convert to grayscale and resize
+    # Convert to grayscale
     img = TF.to_grayscale(img)
-    img = TF.resize(img, IMG_SHAPE)
     
     # Convert to tensor and normalize
     img = TF.to_tensor(img)
@@ -250,12 +249,16 @@ def optimize(model, target_model, memory, optimizer):
     next_q_value = next_q_values.max(1)[0]
     expected_q_value = reward + GAMMA * next_q_value * (1 - done)
 
+    # Replace MSE loss with Huber loss (smooth L1 loss)
+    # loss = nn.functional.smooth_l1_loss(q_value, expected_q_value)
     loss = nn.functional.mse_loss(q_value, expected_q_value)
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+    
+    return loss.item()
 
-def play(model_path, track="zengarden", num_episodes=5, verbose=True):
+def play(model_path, track="zengarden", num_episodes=5, max_frames=1000, verbose=True):
     """
     Play mode using a trained model
     Args:
@@ -297,10 +300,9 @@ def play(model_path, track="zengarden", num_episodes=5, verbose=True):
             if verbose:
                 ax.clear()
                 ax.imshow(obs)
-                WH2 = np.array([env.config.screen_width, env.config.screen_height]) / 2
                 plt.pause(1e-3)
             
-            if done or steps >= 1000:
+            if done or steps >= max_frames:
                 break
         
         print(f"Episode {episode + 1}: Total Reward = {episode_reward:.2f}, Steps = {steps}")
@@ -308,6 +310,73 @@ def play(model_path, track="zengarden", num_episodes=5, verbose=True):
     if verbose:
         plt.close()
     env.close()
+
+
+def main(args, device):
+    if args.mode == 'train':
+        # Training mode
+        env = PyTux()
+        model = DQN(NUM_ACTIONS).to(device)
+        target_model = DQN(NUM_ACTIONS).to(device)
+        target_model.load_state_dict(model.state_dict())
+        optimizer = optim.RMSprop(model.parameters(), lr=LEARNING_RATE)
+        memory = ReplayBuffer(MEMORY_SIZE)
+
+        # Initialize state stack
+        state = preprocess(env.reset(args.track)[0])
+        state_stack = deque([state] * STATE_STACK, maxlen=STATE_STACK)
+        episode_reward = 0
+        frame_idx = 0
+
+        for episode in range(1, args.episodes + 1):
+            obs = env.reset(args.track)[0]
+            state = preprocess(obs)
+            state_stack = deque([state] * STATE_STACK, maxlen=STATE_STACK)
+            episode_reward = 0
+            last_rescue = 0
+            cumulative_loss = 0
+            
+            for step in range(args.max_frames):
+                frame_idx += 1
+                stacked_state = np.array(state_stack)
+                epsilon = get_epsilon(frame_idx)
+                action_idx = select_action(model, stacked_state, epsilon)
+                action_dict = get_action_from_index(action_idx)
+                obs, reward, done, last_rescue = env.step(action_dict, step, last_rescue)
+                next_state = preprocess(obs)
+                state_stack.append(next_state)
+                next_stacked = np.array(state_stack)
+
+                memory.push((stacked_state, action_idx, reward, next_stacked, done))
+                loss = optimize(model, target_model, memory, optimizer)
+                if loss is not None:
+                    # print(f"Step {step}: Loss = {loss:.4f}")
+                    cumulative_loss += loss
+
+                if frame_idx % TARGET_UPDATE == 0:
+                    target_model.load_state_dict(model.state_dict())
+
+                episode_reward += reward
+                if done:
+                    break
+
+            print(f"Episode {episode}: reward = {episode_reward}")
+            print(f"Episode {episode}: cumulative loss = {cumulative_loss:.4f}")
+            
+            # Save model periodically
+            if episode % 10 == 0:
+                torch.save(model.state_dict(), args.model_path)
+                print(f"Model saved to {args.model_path}")
+
+        # Save final model
+        torch.save(model.state_dict(), args.model_path)
+        print(f"Final model saved to {args.model_path}")
+        env.close()
+        
+    else:
+        # Playing mode
+        play(args.model_path, args.track, args.play_episodes, args.max_frames, args.verbose)
+
 
 if __name__ == "__main__":
     import argparse
@@ -337,62 +406,5 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
     print("device: ", device)
-    
-    if args.mode == 'train':
-        # Training mode
-        env = PyTux()
-        model = DQN(NUM_ACTIONS).to(device)
-        target_model = DQN(NUM_ACTIONS).to(device)
-        target_model.load_state_dict(model.state_dict())
-        optimizer = optim.RMSprop(model.parameters(), lr=LEARNING_RATE)
-        memory = ReplayBuffer(MEMORY_SIZE)
 
-        # Initialize state stack
-        state = preprocess(env.reset(args.track)[0])
-        state_stack = deque([state] * STATE_STACK, maxlen=STATE_STACK)
-        episode_reward = 0
-        frame_idx = 0
-
-        for episode in range(1, args.episodes + 1):
-            obs = env.reset(args.track)[0]
-            state = preprocess(obs)
-            state_stack = deque([state] * STATE_STACK, maxlen=STATE_STACK)
-            episode_reward = 0
-            last_rescue = 0
-            
-            for step in range(args.max_frames):
-                frame_idx += 1
-                stacked_state = np.array(state_stack)
-                epsilon = get_epsilon(frame_idx)
-                action_idx = select_action(model, stacked_state, epsilon)
-                action_dict = get_action_from_index(action_idx)
-                obs, reward, done, last_rescue = env.step(action_dict, step, last_rescue)
-                next_state = preprocess(obs)
-                state_stack.append(next_state)
-                next_stacked = np.array(state_stack)
-
-                memory.push((stacked_state, action_idx, reward, next_stacked, done))
-                optimize(model, target_model, memory, optimizer)
-
-                if frame_idx % TARGET_UPDATE == 0:
-                    target_model.load_state_dict(model.state_dict())
-
-                episode_reward += reward
-                if done:
-                    break
-
-            print(f"Episode {episode}: reward = {episode_reward}")
-            
-            # Save model periodically
-            if episode % 10 == 0:
-                torch.save(model.state_dict(), args.model_path)
-                print(f"Model saved to {args.model_path}")
-
-        # Save final model
-        torch.save(model.state_dict(), args.model_path)
-        print(f"Final model saved to {args.model_path}")
-        env.close()
-        
-    else:
-        # Playing mode
-        play(args.model_path, args.track, args.play_episodes, args.verbose)
+    main(args, device)
