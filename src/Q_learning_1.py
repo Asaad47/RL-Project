@@ -23,6 +23,8 @@ class PyTux:
         self.config.screen_height = screen_height
         pystk.init(self.config)
         self.k = None
+        
+        self.prev_distance_down_track = 0
 
     @staticmethod
     def _point_on_track(distance, track, offset=0.0):
@@ -81,23 +83,32 @@ class PyTux:
         kart = state.players[0].kart
         current_vel = np.linalg.norm(kart.velocity)
         
+        # print(f"t: {t}, kart.distance_down_track: {kart.distance_down_track}, current_vel: {current_vel}")
+        
         # Check if kart needs rescue
-        if current_vel < 1.0 and t - last_rescue > RESCUE_TIMEOUT:
+        if t - last_rescue > RESCUE_TIMEOUT and (current_vel < 1.0 or kart.distance_down_track - self.prev_distance_down_track < 0.005):
             last_rescue = t
             action.rescue = True
+            # print(f">>> rescued. current_vel: {current_vel}")
 
         done = np.isclose(kart.overall_distance / track.length, 1.0, atol=2e-3)
         
         # Calculate reward based on progress and speed
         if done:
-            reward = 1000
+            reward = 10
             print(">>> arrived!")
-        elif current_vel < 5.0:
+        elif kart.distance_down_track - self.prev_distance_down_track < 0.01:
             reward = -1
+        elif action.rescue:
+            reward = -1
+        elif current_vel < 5.0:  # TODO: add condition for difference of kart.distance_down_track == 0
+            reward = -0.5
         else:
-            reward = 1
-            # reward = (kart.overall_distance / track.length)
+            # reward = 1
+            reward = (kart.distance_down_track / track.length)
 
+        self.prev_distance_down_track = kart.distance_down_track
+        
         return np.array(self.k.render_data[0].image), reward, done, last_rescue
 
     def close(self):
@@ -123,7 +134,7 @@ IMG_SHAPE = (128, 96)  # Original image size
 
 # Action space
 STEER_VALUES = [0, -1, 1]  # 3 values
-ACCEL_VALUES = [1.0, 0.5, 0.0]  # 3 values
+ACCEL_VALUES = [1.0, 0.5, 0.05]  # 3 values
 BRAKE_VALUES = [False, True]  # 2 values
 DRIFT_VALUES = [False, True]  # 2 values
 NITRO_VALUES = [True, False]  # 2 values
@@ -310,7 +321,6 @@ def play(model_path, track="zengarden", num_episodes=5, max_frames=1000, verbose
     if verbose:
         plt.close()
     env.close()
-
 
 def main(args, device):
     if args.mode == 'train':
