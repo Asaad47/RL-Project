@@ -24,36 +24,48 @@ DRIFT_VALUES = [False, True]  # 2 values
 NITRO_VALUES = [True, False]  # 2 values
 
 # Total number of actions: 3 * 3 * 2 * 2 * 2 = 72
-NUM_ACTIONS = len(STEER_VALUES) * len(ACCEL_VALUES) * len(BRAKE_VALUES) * len(DRIFT_VALUES) * len(NITRO_VALUES)
+# NUM_ACTIONS = len(STEER_VALUES) * len(ACCEL_VALUES) * len(BRAKE_VALUES) * len(DRIFT_VALUES) * len(NITRO_VALUES)
+NUM_ACTIONS = len(STEER_VALUES)
 
 # State discretization
 IMG_WIDTH = 128
 IMG_HEIGHT = 96
 VELOCITY_BINS = 30  # Number of bins for velocity
 
+MAX_SAME_POSITION_COUNT = 80
 
 def get_action_from_index(action_idx):
     """Convert a single action index to the corresponding action tuple"""
-    nitro_idx = action_idx % len(NITRO_VALUES)
-    action_idx = action_idx // len(NITRO_VALUES)
+    # nitro_idx = action_idx % len(NITRO_VALUES)
+    # action_idx = action_idx // len(NITRO_VALUES)
     
-    drift_idx = action_idx % len(DRIFT_VALUES)
-    action_idx = action_idx // len(DRIFT_VALUES)
+    # drift_idx = action_idx % len(DRIFT_VALUES)
+    # action_idx = action_idx // len(DRIFT_VALUES)
     
-    brake_idx = action_idx % len(BRAKE_VALUES)
-    action_idx = action_idx // len(BRAKE_VALUES)
+    # brake_idx = action_idx % len(BRAKE_VALUES)
+    # action_idx = action_idx // len(BRAKE_VALUES)
     
-    accel_idx = action_idx % len(ACCEL_VALUES)
-    action_idx = action_idx // len(ACCEL_VALUES)
+    # accel_idx = action_idx % len(ACCEL_VALUES)
+    # action_idx = action_idx // len(ACCEL_VALUES)
+    
+    # steer_idx = action_idx % len(STEER_VALUES)
+    
+    # return {
+    #     'steer': STEER_VALUES[steer_idx],
+    #     'acceleration': ACCEL_VALUES[accel_idx],
+    #     'brake': BRAKE_VALUES[brake_idx],
+    #     'drift': DRIFT_VALUES[drift_idx],
+    #     'nitro': NITRO_VALUES[nitro_idx]
+    # }
     
     steer_idx = action_idx % len(STEER_VALUES)
     
     return {
         'steer': STEER_VALUES[steer_idx],
-        'acceleration': ACCEL_VALUES[accel_idx],
-        'brake': BRAKE_VALUES[brake_idx],
-        'drift': DRIFT_VALUES[drift_idx],
-        'nitro': NITRO_VALUES[nitro_idx]
+        'acceleration': 1,
+        'brake': False,
+        'drift': False,
+        'nitro': False
     }
 
 def create_action(action_dict):
@@ -81,6 +93,7 @@ class PyTux:
         self.k = None
         
         self.prev_distance_down_track = 0
+        self.same_position_count = 0
 
     @staticmethod
     def _point_on_track(distance, track, offset=0.0):
@@ -110,11 +123,9 @@ class PyTux:
         
         # Transform from [-1, 1] to pixel coordinates
         x = int((aim_point_image[0] + 1) / 2 * (IMG_WIDTH - 1))
-        y = int((aim_point_image[1] + 1) / 2 * (IMG_HEIGHT - 1))
         
         # Ensure coordinates are within image boundaries
         x = np.clip(x, 0, IMG_WIDTH - 1)
-        y = np.clip(y, 0, IMG_HEIGHT - 1)
         
         velocity = np.linalg.norm(kart.velocity)
         velocity_bin = min(int(velocity), VELOCITY_BINS - 1)  # cap at VELOCITY_BINS
@@ -122,7 +133,7 @@ class PyTux:
         # prev_distance_down_track = self.prev_distance_down_track / track.length * 100
         
         # return (*aim_point_image, int(velocity), int(distance_down_track), int(prev_distance_down_track))
-        return (x, y, velocity_bin)
+        return (x,)
 
 
     def reset(self, track):
@@ -150,22 +161,21 @@ class PyTux:
     def get_reward(self, discrete_state, action):
         
         x = discrete_state[0]
-        y = discrete_state[1]
-        velocity = discrete_state[2]
+        # velocity = discrete_state[1]
         
         reward = 0
         
-        if action.steer == 1 and x < IMG_WIDTH / 2:
+        if action.steer != -1 and x < IMG_WIDTH / 2:
             reward -= (IMG_WIDTH - 2 * x) / IMG_WIDTH
-        elif action.steer == -1 and x > IMG_WIDTH / 2:
+        elif action.steer != 1 and x > IMG_WIDTH / 2:
             reward -= (2 * x - IMG_WIDTH) / IMG_WIDTH
 
         if action.rescue:
             reward -= 1
-        elif velocity < 5:
-            reward -= 0.5
-        else:
-            reward += 1
+        # elif velocity < 5:
+        #     reward -= 0.5
+        # else:
+        #     reward += 1
         
         return reward
 
@@ -180,6 +190,7 @@ class PyTux:
             
         # get reward from discrete state
         reward = self.get_reward(discrete_state, action)
+        
 
         self.k.step(action)
         state = pystk.WorldState()
@@ -190,10 +201,16 @@ class PyTux:
         kart = state.players[0].kart
         current_vel = np.linalg.norm(kart.velocity)
         
+        if abs(kart.distance_down_track - self.prev_distance_down_track) < 0.005:
+            self.same_position_count += 1
+        else:
+            self.same_position_count = 0
+        
+        self.prev_distance_down_track = kart.distance_down_track
+        
         # print(f"t: {t}, kart.distance_down_track: {kart.distance_down_track}, current_vel: {current_vel}")
         
         # Check if kart needs rescue
-        # if t - last_rescue > RESCUE_TIMEOUT and (current_vel < 1.0 or kart.distance_down_track - self.prev_distance_down_track < 0.005):
         if t - last_rescue > RESCUE_TIMEOUT and current_vel < 1.0:
             last_rescue = t
             action.rescue = True
@@ -205,6 +222,7 @@ class PyTux:
             print(f">>> finished, t: {t}")
             reward += 10
         
+        reward += kart.distance_down_track / track.length
         # return np.array(self.k.render_data[0].image), reward, done, last_rescue
         return state, track, reward, done, last_rescue
 
@@ -222,7 +240,7 @@ class Agent:
     def __init__(self, q_table_path=None):
         # Initialize Q-table with zeros
         # Shape: (img_width, img_height, velocity_bins, num_actions)
-        self.q_table = np.zeros((IMG_WIDTH, IMG_HEIGHT, VELOCITY_BINS, NUM_ACTIONS))
+        self.q_table = np.zeros((IMG_WIDTH, NUM_ACTIONS))
         self.frame_idx = 0
         
         if q_table_path is not None:
@@ -281,6 +299,9 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
             state, track_obj, reward, done, last_rescue = env.step(action_idx, step, last_rescue, discrete_state)
             next_discrete_state = env.get_discrete_state(state, track_obj)
             
+            if env.same_position_count > MAX_SAME_POSITION_COUNT / 2:
+                reward -= 2
+            
             if mode == 'train':
                 loss = agent.learn(discrete_state, action_idx, reward, next_discrete_state, done)
                 cumulative_loss += loss
@@ -299,7 +320,15 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
                 aim_point_world = env._point_on_track(kart.distance_down_track+TRACK_OFFSET, track_obj)
                 aim_point_image = env._to_image(aim_point_world, proj, view)
                 ax.add_artist(plt.Circle(WH2*(1+aim_point_image), 2, ec='r', fill=False, lw=1.5))   
+                
+                print(f"discrete_state: {discrete_state}, action_idx: {action_idx}")
                 plt.pause(1e-3)
+            
+            if env.same_position_count > MAX_SAME_POSITION_COUNT:
+                done = True
+                print(f">>> same position for {env.same_position_count} frames. Killed after {step + 1} steps")
+                env.prev_distance_down_track = 0
+                env.same_position_count = 0
             
             if done:
                 break
