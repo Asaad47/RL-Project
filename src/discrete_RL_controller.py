@@ -93,7 +93,7 @@ class PyTux:
         PyTux._singleton = self
         self.mode = mode
         if mode == 'train':
-            self.config = pystk.GraphicsConfig.none()
+            self.config = pystk.GraphicsConfig.ld()
         else:
             self.config = pystk.GraphicsConfig.hd()
         self.config.screen_width = screen_width
@@ -279,6 +279,7 @@ class Agent:
         return abs(target_q - current_q)  # Return TD error as loss
 
 def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode='train', q_table_path=None):
+    print(f"track: {track}, mode: {mode}")
     env = PyTux(mode)
     agent = Agent(q_table_path)
     # planner = load_model().eval()
@@ -345,8 +346,7 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
                 break
         
         if mode == 'train':
-            print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Loss = {cumulative_loss:.4f}")
-            print(f"Q-value stats - Mean: {np.mean(agent.q_table):.3f}, Max: {np.max(agent.q_table):.3f}, Min: {np.min(agent.q_table):.3f}, Std: {np.std(agent.q_table):.3f}")
+            print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Loss = {cumulative_loss:.4f}, distance_down_track: {int(100 * state.players[0].kart.distance_down_track / track_obj.length)}%")
         else:
             print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}")
         
