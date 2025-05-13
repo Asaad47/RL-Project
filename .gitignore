@@ -3,6 +3,7 @@ __pycache__
 planner_*.th
 planner.th
 
+trained_models/
 drive_data/
 Styles/
 *.pdf
