@@ -32,7 +32,7 @@ IMG_WIDTH = 128
 IMG_HEIGHT = 96
 VELOCITY_BINS = 30  # Number of bins for velocity
 
-MAX_SAME_POSITION_COUNT = 80
+MAX_SAME_POSITION_COUNT = 60
 
 def get_action_from_index(action_idx):
     """Convert a single action index to the corresponding action tuple"""
@@ -62,7 +62,7 @@ def get_action_from_index(action_idx):
     
     return {
         'steer': STEER_VALUES[steer_idx],
-        'acceleration': 1,
+        'acceleration': 0.8,
         'brake': False,
         'drift': False,
         'nitro': False
@@ -169,6 +169,8 @@ class PyTux:
             reward -= (IMG_WIDTH - 2 * x) / IMG_WIDTH
         elif action.steer != 1 and x > IMG_WIDTH / 2:
             reward -= (2 * x - IMG_WIDTH) / IMG_WIDTH
+        else:
+            reward += 0.01
 
         if action.rescue:
             reward -= 1
@@ -211,10 +213,10 @@ class PyTux:
         # print(f"t: {t}, kart.distance_down_track: {kart.distance_down_track}, current_vel: {current_vel}")
         
         # Check if kart needs rescue
-        if t - last_rescue > RESCUE_TIMEOUT and current_vel < 1.0:
+        if current_vel < 1.0 and t - last_rescue > RESCUE_TIMEOUT:
             last_rescue = t
             action.rescue = True
-            # print(f">>> rescued. current_vel: {current_vel}")
+            print(f">>> rescued. current_vel: {current_vel}")
 
         done = np.isclose(kart.overall_distance / track.length, 1.0, atol=2e-3)
         
@@ -222,7 +224,7 @@ class PyTux:
             print(f">>> finished, t: {t}")
             reward += 10
         
-        reward += kart.distance_down_track / track.length
+        # reward += kart.distance_down_track / track.length
         # return np.array(self.k.render_data[0].image), reward, done, last_rescue
         return state, track, reward, done, last_rescue
 
@@ -299,8 +301,8 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
             state, track_obj, reward, done, last_rescue = env.step(action_idx, step, last_rescue, discrete_state)
             next_discrete_state = env.get_discrete_state(state, track_obj)
             
-            if env.same_position_count > MAX_SAME_POSITION_COUNT / 2:
-                reward -= 2
+            # if env.same_position_count > MAX_SAME_POSITION_COUNT / 2:
+            #     reward -= 2
             
             if mode == 'train':
                 loss = agent.learn(discrete_state, action_idx, reward, next_discrete_state, done)
@@ -321,10 +323,10 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
                 aim_point_image = env._to_image(aim_point_world, proj, view)
                 ax.add_artist(plt.Circle(WH2*(1+aim_point_image), 2, ec='r', fill=False, lw=1.5))   
                 
-                print(f"discrete_state: {discrete_state}, action_idx: {action_idx}")
+                print(f"t: {step}, discrete_state: {discrete_state}, action_idx: {action_idx}, reward: {reward}, kart.distance_down_track: {kart.distance_down_track}")
                 plt.pause(1e-3)
             
-            if env.same_position_count > MAX_SAME_POSITION_COUNT:
+            if not verbose and env.same_position_count > MAX_SAME_POSITION_COUNT:
                 done = True
                 print(f">>> same position for {env.same_position_count} frames. Killed after {step + 1} steps")
                 env.prev_distance_down_track = 0
@@ -335,11 +337,12 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
         
         if mode == 'train':
             print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Loss = {cumulative_loss:.4f}")
+            print(f"Q-value stats - Mean: {np.mean(agent.q_table):.3f}, Max: {np.max(agent.q_table):.3f}, Min: {np.min(agent.q_table):.3f}, Std: {np.std(agent.q_table):.3f}")
         else:
             print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}")
         
         # Save Q-table periodically
-        if (episode + 1) % 10 == 0:
+        if mode == 'train' and (episode + 1) % 10 == 0:
             np.save(f'trained_models/qtable_ep{episode+1}.npy', agent.q_table)
             print(f"Q-table saved at episode {episode + 1}")
     
