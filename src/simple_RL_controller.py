@@ -5,7 +5,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from planner import load_model
 import torchvision.transforms.functional as TF
-
+import pandas as pd
 
 # Constants
 RESCUE_TIMEOUT = 30
@@ -83,10 +83,14 @@ def create_action(action_dict):
 class PyTux:
     _singleton = None
 
-    def __init__(self, screen_width=128, screen_height=96):
+    def __init__(self, mode, screen_width=128, screen_height=96):
         assert PyTux._singleton is None, "Cannot create more than one pytux object"
         PyTux._singleton = self
-        self.config = pystk.GraphicsConfig.hd()
+        self.mode = mode
+        if mode == 'train':
+            self.config = pystk.GraphicsConfig.none()
+        else:
+            self.config = pystk.GraphicsConfig.hd()
         self.config.screen_width = screen_width
         self.config.screen_height = screen_height
         pystk.init(self.config)
@@ -275,9 +279,16 @@ class Agent:
         return abs(target_q - current_q)  # Return TD error as loss
 
 def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode='train', q_table_path=None):
-    env = PyTux()
+    env = PyTux(mode)
     agent = Agent(q_table_path)
     # planner = load_model().eval()
+    
+    q_min = []
+    q_max = []
+    q_mean = []
+    num_steps = []
+    cumulative_rewards = []
+    finished_status = []
     
     if mode == 'train':
         epsilon = None
@@ -294,6 +305,7 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
         episode_reward = 0
         last_rescue = 0
         cumulative_loss = 0
+        kill_episode = False
         
         for step in range(max_frames):
             
@@ -327,12 +339,12 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
                 plt.pause(1e-3)
             
             if not verbose and env.same_position_count > MAX_SAME_POSITION_COUNT:
-                done = True
+                kill_episode = True
                 print(f">>> same position for {env.same_position_count} frames. Killed after {step + 1} steps")
                 env.prev_distance_down_track = 0
                 env.same_position_count = 0
             
-            if done:
+            if done or kill_episode:
                 break
         
         if mode == 'train':
@@ -343,8 +355,25 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
         
         # Save Q-table periodically
         if mode == 'train' and (episode + 1) % 10 == 0:
-            np.save(f'trained_models/qtable_ep{episode+1}.npy', agent.q_table)
+            np.save(f'trained_models/{track}/simple_qtable_ep{episode+1}.npy', agent.q_table)
             print(f"Q-table saved at episode {episode + 1}")
+            q_min.append(np.min(agent.q_table))
+            q_max.append(np.max(agent.q_table))
+            q_mean.append(np.mean(agent.q_table))
+            num_steps.append(step + 1)
+            cumulative_rewards.append(episode_reward)
+            finished_status.append(done)
+            
+    if mode == 'train':
+        df = pd.DataFrame({
+            'q_min': q_min,
+            'q_max': q_max,
+            'q_mean': q_mean,
+            'num_steps': num_steps,
+            'cumulative_rewards': cumulative_rewards,
+            'finished_status': finished_status
+        })
+        df.to_csv(f'trained_models/{track}/simple_qstats.csv', index=False)
     
     if verbose:
         plt.close()
