@@ -1,0 +1,132 @@
+script                , track             , episode, reward, steps, distance_down_track
+simple_RL_controller  , zengarden         ,    2910, 12.75 ,   547,                  99
+simple_RL_controller  , zengarden         ,    2920, 2.02  ,   202,                   5
+simple_RL_controller  , zengarden         ,    2930, 2.02  ,   202,                   5
+simple_RL_controller  , zengarden         ,    2940, 2.02  ,   202,                   5
+simple_RL_controller  , zengarden         ,    2950, 2.02  ,   202,                   5
+simple_RL_controller  , zengarden         ,    2960, 2.02  ,   202,                   5
+simple_RL_controller  , zengarden         ,    2970, 2.02  ,   202,                   5
+simple_RL_controller  , zengarden         ,    2980, 1.21  ,   128,                  12
+simple_RL_controller  , zengarden         ,    2990, 2.59  ,   304,                  32
+simple_RL_controller  , zengarden         ,    3000, 2.71  ,   322,                  28
+
+simple_RL_controller  , lighthouse        ,    2910, 14.17 ,   491,                  99
+simple_RL_controller  , lighthouse        ,    2920, 1.17  ,   130,                  12
+simple_RL_controller  , lighthouse        ,    2930, 1.17  ,   130,                  12
+simple_RL_controller  , lighthouse        ,    2940, 4.19  ,   527,                  91
+simple_RL_controller  , lighthouse        ,    2950, 13.8  ,   531,                  99
+simple_RL_controller  , lighthouse        ,    2960, 2.0   ,   252,                  40
+simple_RL_controller  , lighthouse        ,    2970, 1.54  ,   256,                  40
+simple_RL_controller  , lighthouse        ,    2980, 15.04 ,   504,                  99
+simple_RL_controller  , lighthouse        ,    2990, 3.21  ,   332,                  49
+simple_RL_controller  , lighthouse        ,    3000, 15.11 ,   511,                  99
+
+simple_RL_controller  , hacienda          ,    2910, 16.33 ,   633,                  99
+simple_RL_controller  , hacienda          ,    2920, 16.08 ,   608,                  99
+simple_RL_controller  , hacienda          ,    2930, 16.33 ,   633,                  99
+simple_RL_controller  , hacienda          ,    2940, 3.61  ,   501,                  71
+simple_RL_controller  , hacienda          ,    2950, 16.08 ,   608,                  99
+simple_RL_controller  , hacienda          ,    2960, 16.33 ,   633,                  99
+simple_RL_controller  , hacienda          ,    2970, 14.01 ,   567,                  99
+simple_RL_controller  , hacienda          ,    2980, 13.08 ,   650,                  99
+simple_RL_controller  , hacienda          ,    2990, 3.78  ,   509,                  71
+simple_RL_controller  , hacienda          ,    3000, 16.08 ,   608,                  99
+
+simple_RL_controller  , snowtuxpeak       ,    2910, 4.28  ,   428,                  69
+simple_RL_controller  , snowtuxpeak       ,    2920, 15.18 ,   518,                  99
+simple_RL_controller  , snowtuxpeak       ,    2930, 14.59 ,   675,                  99
+simple_RL_controller  , snowtuxpeak       ,    2940, 4.28  ,   428,                  69
+simple_RL_controller  , snowtuxpeak       ,    2950, 4.28  ,   428,                  69
+simple_RL_controller  , snowtuxpeak       ,    2960, 4.28  ,   428,                  69
+simple_RL_controller  , snowtuxpeak       ,    2970, 2.41  ,   430,                  69
+simple_RL_controller  , snowtuxpeak       ,    2980, 15.18 ,   518,                  99
+simple_RL_controller  , snowtuxpeak       ,    2990, 15.18 ,   518,                  99
+simple_RL_controller  , snowtuxpeak       ,    3000, 4.28  ,   428,                  69
+
+simple_RL_controller  , cornfield_crossing,    2910, 1.57  ,   157,                  11
+simple_RL_controller  , cornfield_crossing,    2920, 1.51  ,   151,                  10
+simple_RL_controller  , cornfield_crossing,    2930, 1.57  ,   157,                  11
+simple_RL_controller  , cornfield_crossing,    2940, 1.51  ,   151,                  10
+simple_RL_controller  , cornfield_crossing,    2950, 1.51  ,   151,                  10
+simple_RL_controller  , cornfield_crossing,    2960, 1.51  ,   151,                  10
+simple_RL_controller  , cornfield_crossing,    2970, 1.44  ,   152,                  10
+simple_RL_controller  , cornfield_crossing,    2980, 17.11 ,   711,                  99
+simple_RL_controller  , cornfield_crossing,    2990, 17.11 ,   711,                  99
+simple_RL_controller  , cornfield_crossing,    3000, 1.2   ,   148,                  10
+
+simple_RL_controller  , scotland          ,    2910, 16.6  ,   660,                  99
+simple_RL_controller  , scotland          ,    2920, 16.6  ,   660,                  99
+simple_RL_controller  , scotland          ,    2930, 16.41 ,   675,                  99
+simple_RL_controller  , scotland          ,    2940, 16.17 ,   660,                  99
+simple_RL_controller  , scotland          ,    2950, 16.75 ,   675,                  99
+simple_RL_controller  , scotland          ,    2960, 16.75 ,   675,                  99
+simple_RL_controller  , scotland          ,    2970, 16.6  ,   660,                  99
+simple_RL_controller  , scotland          ,    2980, 16.74 ,   674,                  99
+simple_RL_controller  , scotland          ,    2990, 16.75 ,   675,                  99
+simple_RL_controller  , scotland          ,    3000, 16.74 ,   674,                  99
+
+discrete_RL_controller, zengarden         ,    2910, 2.58  ,   610,                  99
+discrete_RL_controller, zengarden         ,    2920, 6.84  ,   452,                  58
+discrete_RL_controller, zengarden         ,    2930, 16.07 ,   641,                  99
+discrete_RL_controller, zengarden         ,    2940, 18.74 ,   637,                  99
+discrete_RL_controller, zengarden         ,    2950, 18.74 ,   637,                  99
+discrete_RL_controller, zengarden         ,    2960, 18.74 ,   637,                  99
+discrete_RL_controller, zengarden         ,    2970, 20.19 ,   528,                  99
+discrete_RL_controller, zengarden         ,    2980, 20.19 ,   528,                  99
+discrete_RL_controller, zengarden         ,    2990, 20.19 ,   528,                  99
+discrete_RL_controller, zengarden         ,    3000, 14.1  ,   585,                  99
+
+discrete_RL_controller, lighthouse        ,    2910, 9.98  ,   568,                  90
+discrete_RL_controller, lighthouse        ,    2920, 15.28 ,   656,                  98
+discrete_RL_controller, lighthouse        ,    2930, 15.28 ,   656,                  98
+discrete_RL_controller, lighthouse        ,    2940, 5.87  ,   545,                  90
+discrete_RL_controller, lighthouse        ,    2950, 2.75  ,   595,                  99
+discrete_RL_controller, lighthouse        ,    2960, -0.2  ,   620,                  94
+discrete_RL_controller, lighthouse        ,    2970, -8.57 ,   531,                  85
+discrete_RL_controller, lighthouse        ,    2980, 17.32 ,   533,                  99
+discrete_RL_controller, lighthouse        ,    2990, -23.4 ,   613,                  98
+discrete_RL_controller, lighthouse        ,    3000, 8.57  ,   601,                  99
+
+discrete_RL_controller, hacienda          ,    2910, -5.43 ,   806,                  95
+discrete_RL_controller, hacienda          ,    2920, 3.37  ,   796,                  94
+discrete_RL_controller, hacienda          ,    2930, 19.36 ,   580,                  71
+discrete_RL_controller, hacienda          ,    2940, 19.36 ,   580,                  71
+discrete_RL_controller, hacienda          ,    2950, 19.36 ,   580,                  71
+discrete_RL_controller, hacienda          ,    2960, 19.36 ,   580,                  71
+discrete_RL_controller, hacienda          ,    2970, 16.0  ,   545,                  71
+discrete_RL_controller, hacienda          ,    2980, -5.5  ,   606,                  70
+discrete_RL_controller, hacienda          ,    2990, -3.84 ,   606,                  70
+discrete_RL_controller, hacienda          ,    3000, -3.84 ,   606,                  70
+
+discrete_RL_controller, snowtuxpeak       ,    2910, -3.66 ,   765,                  97
+discrete_RL_controller, snowtuxpeak       ,    2920, 14.41 ,   782,                  99
+discrete_RL_controller, snowtuxpeak       ,    2930, 24.02 ,   875,                  99
+discrete_RL_controller, snowtuxpeak       ,    2940, 12.76 ,   607,                  84
+discrete_RL_controller, snowtuxpeak       ,    2950, 12.76 ,   607,                  84
+discrete_RL_controller, snowtuxpeak       ,    2960, 12.76 ,   607,                  84
+discrete_RL_controller, snowtuxpeak       ,    2970, 12.76 ,   607,                  84
+discrete_RL_controller, snowtuxpeak       ,    2980, 12.76 ,   607,                  84
+discrete_RL_controller, snowtuxpeak       ,    2990, 18.93 ,   529,                  69
+discrete_RL_controller, snowtuxpeak       ,    3000, 18.93 ,   529,                  69
+
+discrete_RL_controller, cornfield_crossing,    2910, 21.31 ,   727,                  80
+discrete_RL_controller, cornfield_crossing,    2920, 21.31 ,   727,                  80
+discrete_RL_controller, cornfield_crossing,    2930, 21.45 ,   727,                  80
+discrete_RL_controller, cornfield_crossing,    2940, 21.45 ,   727,                  80
+discrete_RL_controller, cornfield_crossing,    2950, 21.45 ,   727,                  80
+discrete_RL_controller, cornfield_crossing,    2960, 21.45 ,   727,                  80
+discrete_RL_controller, cornfield_crossing,    2970, 21.45 ,   727,                  80
+discrete_RL_controller, cornfield_crossing,    2980, 21.45 ,   727,                  80
+discrete_RL_controller, cornfield_crossing,    2990, 17.11 ,   842,                  99
+discrete_RL_controller, cornfield_crossing,    3000, 17.55 ,   901,                  99
+
+discrete_RL_controller, scotland          ,    2910, 27.3  ,   771,                  90
+discrete_RL_controller, scotland          ,    2920, 27.3  ,   771,                  90
+discrete_RL_controller, scotland          ,    2930, 27.3  ,   771,                  90
+discrete_RL_controller, scotland          ,    2940, 27.3  ,   771,                  90
+discrete_RL_controller, scotland          ,    2950, 27.3  ,   771,                  90
+discrete_RL_controller, scotland          ,    2960, 27.3  ,   771,                  90
+discrete_RL_controller, scotland          ,    2970, 27.3  ,   771,                  90
+discrete_RL_controller, scotland          ,    2980, 27.3  ,   771,                  90
+discrete_RL_controller, scotland          ,    2990, 27.3  ,   771,                  90
+discrete_RL_controller, scotland          ,    3000, 27.3  ,   771,                  90
