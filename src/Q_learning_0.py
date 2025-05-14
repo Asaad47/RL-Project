@@ -250,6 +250,15 @@ if __name__ == '__main__':
         "scotland": 800,
     }
     
+    tracks_lengths = {
+        "zengarden": 710.3971557617188,
+        "lighthouse": 879.8558959960938,
+        "hacienda": 1166.5313720703125,
+        "snowtuxpeak": 992.5704956054688,
+        "cornfield_crossing": 1263.839111328125,
+        "scotland": 1328.66259765625,
+    }
+    
     parser = ArgumentParser()
     parser.add_argument('track', nargs='+')
     parser.add_argument('-v', '--verbose', action='store_true')
