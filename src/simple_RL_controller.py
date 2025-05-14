@@ -225,7 +225,7 @@ class PyTux:
         done = np.isclose(kart.overall_distance / track.length, 1.0, atol=2e-3)
         
         if done:
-            print(f">>> finished, t: {t}")
+            # print(f">>> finished, t: {t}")
             reward += 10
         
         # reward += kart.distance_down_track / track.length
@@ -341,7 +341,7 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
             
             if not verbose and env.same_position_count > MAX_SAME_POSITION_COUNT:
                 kill_episode = True
-                print(f">>> same position for {env.same_position_count} frames. Killed after {step + 1} steps")
+                # print(f">>> same position for {env.same_position_count} frames. Killed after {step + 1} steps")
                 env.prev_distance_down_track = 0
                 env.same_position_count = 0
             
@@ -349,14 +349,15 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
                 break
         
         if mode == 'train':
-            print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Loss = {cumulative_loss:.4f}, distance_down_track: {int(100 * state.players[0].kart.distance_down_track / track_obj.length)}%")
+            pass
+            # print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Loss = {cumulative_loss:.4f}, distance_down_track: {int(100 * state.players[0].kart.distance_down_track / track_obj.length)}%")
         else:
-            print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}")
+            print(f"Reward = {episode_reward:.2f}, steps: {step + 1}, distance_down_track: {int(100 * state.players[0].kart.distance_down_track / track_obj.length)}%")
         
         # Save Q-table periodically
         if mode == 'train' and (episode + 1) % 10 == 0:
             np.save(f'trained_models/{track}/simple_qtable_ep{episode+1}.npy', agent.q_table)
-            print(f"Q-table saved at episode {episode + 1}")
+            # print(f"Q-table saved at episode {episode + 1}")
             q_min.append(np.min(agent.q_table))
             q_max.append(np.max(agent.q_table))
             q_mean.append(np.mean(agent.q_table))
