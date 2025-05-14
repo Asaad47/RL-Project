@@ -16,3 +16,5 @@ Styles/
 *.out
 *.synctex.gz
 *.toc
+
+venv/
