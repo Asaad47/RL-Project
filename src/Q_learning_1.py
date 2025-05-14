@@ -25,6 +25,7 @@ class PyTux:
         self.k = None
         
         self.prev_distance_down_track = 0
+        self.same_position_count = 0
 
     @staticmethod
     def _point_on_track(distance, track, offset=0.0):
@@ -73,16 +74,28 @@ class PyTux:
         elif isinstance(action, dict):
             # Convert action dictionary to pystk.Action
             action = create_action(action)
+            
 
         self.k.step(action)
         state = pystk.WorldState()
-        state.update()
         track = pystk.Track()
+        state.update()
         track.update()
 
         kart = state.players[0].kart
         current_vel = np.linalg.norm(kart.velocity)
         
+        
+        # Calculate reward based on progress and speed
+        reward = 0
+        if kart.distance_down_track - self.prev_distance_down_track < 0.01 or current_vel < 5.0:
+            reward -= 0.5
+        
+        if action.rescue:
+            reward -= 0.5
+        else:
+            reward += (kart.distance_down_track / track.length)
+            
         # print(f"t: {t}, kart.distance_down_track: {kart.distance_down_track}, current_vel: {current_vel}")
         
         # Check if kart needs rescue
@@ -93,20 +106,14 @@ class PyTux:
 
         done = np.isclose(kart.overall_distance / track.length, 1.0, atol=2e-3)
         
-        # Calculate reward based on progress and speed
         if done:
-            reward = 10
+            reward += np.max([10 - (t / 100), 0.1])
             print(">>> arrived!")
-        elif kart.distance_down_track - self.prev_distance_down_track < 0.01:
-            reward = -1
-        elif action.rescue:
-            reward = -1
-        elif current_vel < 5.0:  # TODO: add condition for difference of kart.distance_down_track == 0
-            reward = -0.5
-        else:
-            # reward = 1
-            reward = (kart.distance_down_track / track.length)
 
+        if kart.distance_down_track == self.prev_distance_down_track:
+            self.same_position_count += 1
+        else:
+            self.same_position_count = 0
         self.prev_distance_down_track = kart.distance_down_track
         
         return np.array(self.k.render_data[0].image), reward, done, last_rescue
@@ -131,6 +138,7 @@ EPSILON_END = 0.1
 EPSILON_DECAY = 50000
 STATE_STACK = 4
 IMG_SHAPE = (128, 96)  # Original image size
+MAX_SAME_POSITION_COUNT = 60
 
 # Action space
 STEER_VALUES = [0, -1, 1]  # 3 values
@@ -269,152 +277,134 @@ def optimize(model, target_model, memory, optimizer):
     
     return loss.item()
 
-def play(model_path, track="zengarden", num_episodes=5, max_frames=1000, verbose=True):
-    """
-    Play mode using a trained model
-    Args:
-        model_path: Path to the saved model
-        track: Track to play on
-        num_episodes: Number of episodes to play
-        verbose: Whether to show the game window
-    """
-    # Load the trained model
+def run(track="zengarden", device='cuda', num_episodes=100, max_frames=1000, verbose=True, mode='train', model_path=None, frame_skip=4):
     model = DQN(NUM_ACTIONS).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.eval()  # Set to evaluation mode
-
-    env = PyTux()
-    
-    if verbose:
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots(1, 1)
-    
-    for episode in range(num_episodes):
-        obs = env.reset(track)[0]
-        state = preprocess(obs)
-        state_stack = deque([state] * STATE_STACK, maxlen=STATE_STACK)
-        episode_reward = 0
-        steps = 0
-        last_rescue = 0
-        while True:
-            stacked_state = np.array(state_stack)
-            # No exploration in play mode
-            action_idx = select_action(model, stacked_state, epsilon=0)
-            action_dict = get_action_from_index(action_idx)
-            obs, reward, done, last_rescue = env.step(action_dict, steps, last_rescue)
-            next_state = preprocess(obs)
-            state_stack.append(next_state)
-            
-            episode_reward += reward
-            steps += 1
-            
-            if verbose:
-                ax.clear()
-                ax.imshow(obs)
-                plt.pause(1e-3)
-            
-            if done or steps >= max_frames:
-                break
-        
-        print(f"Episode {episode + 1}: Total Reward = {episode_reward:.2f}, Steps = {steps}")
-    
-    if verbose:
-        plt.close()
-    env.close()
-
-def main(args, device):
-    if args.mode == 'train':
-        # Training mode
-        env = PyTux()
-        model = DQN(NUM_ACTIONS).to(device)
+    if mode == 'train':
         target_model = DQN(NUM_ACTIONS).to(device)
         target_model.load_state_dict(model.state_dict())
         optimizer = optim.RMSprop(model.parameters(), lr=LEARNING_RATE)
         memory = ReplayBuffer(MEMORY_SIZE)
+    else:
+        model.load_state_dict(torch.load(model_path, map_location=device))
+        model.eval()
 
-        # Initialize state stack
-        state = preprocess(env.reset(args.track)[0])
+    env = PyTux()
+    
+    if mode != 'train' and verbose:
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(1, 1)
+
+    # Initialize state stack
+    state = preprocess(env.reset(args.track)[0])
+    state_stack = deque([state] * STATE_STACK, maxlen=STATE_STACK)
+    episode_reward = 0
+    frame_idx = 0
+
+    for episode in range(1, num_episodes + 1):
+        obs = env.reset(track)[0]
+        state = preprocess(obs)
         state_stack = deque([state] * STATE_STACK, maxlen=STATE_STACK)
         episode_reward = 0
-        frame_idx = 0
-
-        for episode in range(1, args.episodes + 1):
-            obs = env.reset(args.track)[0]
-            state = preprocess(obs)
-            state_stack = deque([state] * STATE_STACK, maxlen=STATE_STACK)
-            episode_reward = 0
-            last_rescue = 0
-            cumulative_loss = 0
-            
-            for step in range(args.max_frames):
-                frame_idx += 1
-                stacked_state = np.array(state_stack)
+        last_rescue = 0
+        cumulative_loss = 0
+        kill_episode = False
+        
+        for step in range(max_frames):
+            frame_idx += 1
+            stacked_state = np.array(state_stack)
+            if mode == 'train':
                 epsilon = get_epsilon(frame_idx)
+            else:
+                epsilon = 0
+                
+            # Only select new action every frame_skip frames
+            if step % frame_skip == 0:
                 action_idx = select_action(model, stacked_state, epsilon)
                 action_dict = get_action_from_index(action_idx)
-                obs, reward, done, last_rescue = env.step(action_dict, step, last_rescue)
-                next_state = preprocess(obs)
-                state_stack.append(next_state)
+            
+            # Apply the same action for frame_skip frames
+            obs, reward, done, last_rescue = env.step(action_dict, step, last_rescue)
+            next_state = preprocess(obs)
+            state_stack.append(next_state)
+
+            if mode == 'train':
                 next_stacked = np.array(state_stack)
 
-                memory.push((stacked_state, action_idx, reward, next_stacked, done))
-                loss = optimize(model, target_model, memory, optimizer)
-                if loss is not None:
-                    # print(f"Step {step}: Loss = {loss:.4f}")
-                    cumulative_loss += loss
+                # Only store transitions when we actually selected a new action
+                if step % frame_skip == 0:
+                    memory.push((stacked_state, action_idx, reward, next_stacked, done))
+                    loss = optimize(model, target_model, memory, optimizer)
+                    if loss is not None:
+                        cumulative_loss += loss
 
                 if frame_idx % TARGET_UPDATE == 0:
                     target_model.load_state_dict(model.state_dict())
+            elif verbose:
+                ax.clear()
+                ax.imshow(obs)
+                plt.pause(1e-3)
 
-                episode_reward += reward
-                if done:
-                    break
-
-            print(f"Episode {episode}: reward = {episode_reward}")
-            print(f"Episode {episode}: cumulative loss = {cumulative_loss:.4f}")
+            episode_reward += reward
             
-            # Save model periodically
-            if episode % 10 == 0:
-                torch.save(model.state_dict(), args.model_path)
-                print(f"Model saved to {args.model_path}")
+            if not verbose and env.same_position_count > MAX_SAME_POSITION_COUNT:
+                kill_episode = True
+                env.prev_distance_down_track = 0
+                env.same_position_count = 0
+            
+            if done or kill_episode:
+                break
 
-        # Save final model
-        torch.save(model.state_dict(), args.model_path)
-        print(f"Final model saved to {args.model_path}")
-        env.close()
+        print(f"Episode {episode}: reward = {episode_reward}, cumulative loss = {cumulative_loss:.4f}, steps = {step + 1}, done = {done}")
         
-    else:
-        # Playing mode
-        play(args.model_path, args.track, args.play_episodes, args.max_frames, args.verbose)
+        # Save model periodically
+        if episode % 10 == 0:
+            torch.save(model.state_dict(), model_path)
+            print(f"Model saved to {model_path}")
+
+    if mode == 'train':
+        # Save final model
+        torch.save(model.state_dict(), model_path)
+        print(f"Final model saved to {model_path}")
+    elif verbose:
+        plt.close()
+    env.close()
 
 
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description='Train or play with DQN agent')
-    parser.add_argument('--mode', type=str, default='train', choices=['train', 'play'],
-                      help='Mode: train or play')
+    parser = argparse.ArgumentParser(description='Train or test with DQN agent')
+    parser.add_argument('--track', type=str, default='zengarden',
+                      help='Track to train/test on')
+    parser.add_argument('--mode', type=str, default='train', choices=['train', 'test'],
+                      help='Mode: train or test')
     parser.add_argument('--model_path', type=str, default='trained_models/dqn_model.pth',
                       help='Path to save/load the model')
-    parser.add_argument('--track', type=str, default='zengarden',
-                      help='Track to train/play on')
-    parser.add_argument('--episodes', type=int, default=100,
+    parser.add_argument('--episodes', type=int, default=1,
                       help='Number of episodes for training')
-    parser.add_argument('--play_episodes', type=int, default=1,
-                      help='Number of episodes for playing')
-    parser.add_argument('--verbose', action='store_true',
-                      help='Show verbose output during playing')
     parser.add_argument('--max_frames', type=int, default=1000,
                       help='Maximum number of frames to play')
+    parser.add_argument('--verbose', action='store_true',
+                      help='Show verbose output during playing')
+    parser.add_argument('--frame_skip', type=int, default=4,
+                      help='Number of frames to repeat each action')
     
     args = parser.parse_args()
     
-    if torch.backends.mps.is_available():
-        device = torch.device("mps")
-    elif torch.cuda.is_available():
+    if torch.cuda.is_available():
         device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
     else:
         device = torch.device("cpu")
     print("device: ", device)
 
-    main(args, device)
+    run(track=args.track, 
+        device=device, 
+        num_episodes=args.episodes, 
+        max_frames=args.max_frames, 
+        verbose=args.verbose, 
+        mode=args.mode, 
+        model_path=args.model_path,
+        frame_skip=args.frame_skip
+    )
