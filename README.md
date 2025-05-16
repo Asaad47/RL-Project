@@ -1,6 +1,52 @@
-# Scripts for testing
+# Reinforcement Learning Project
 
-## Simple RL Controller
+## Installation
+
+On M1 Mac machines:
+
+Open the terminal using `Rosetta` and run the following commands:
+
+```bash
+CONDA_SUBDIR=osx-64 conda create -n tuxcart python=3.9
+conda activate tuxcart
+conda config --env --set subdir osx-64
+pip install -U PySuperTuxKart
+```
+
+Install `numpy`, `matplotlib`, and `torch`.
+
+## Commands for running the project
+
+Inside the `src` directory, `simple_RL_controller.py`, `discrete_RL_controller.py`, `DQN.py`, and `neural_RL_controller.py` are the main scripts for running the project. They can be run with the following commands:
+
+```bash
+python simple_RL_controller.py [--track TRACK_NAME] [--episodes NUM_EPISODES] [--max_frames MAX_FRAMES] [--mode {test, train}] [--q_table_path Q_TABLE_PATH] [--verbose]
+python discrete_RL_controller.py [--track TRACK_NAME] [--episodes NUM_EPISODES] [--max_frames MAX_FRAMES] [--mode {test, train}] [--q_table_path Q_TABLE_PATH] [--verbose]
+python DQN.py [--track TRACK_NAME] [--episodes NUM_EPISODES] [--max_frames MAX_FRAMES] [--mode {test, train}] [--model_path MODEL_PATH] [--frame_skip FRAME_SKIP] [--verbose]
+python neural_RL_controller.py [--track TRACK_NAME] [--episodes NUM_EPISODES] [--max_frames MAX_FRAMES] [--mode {test, train}] [--q_network_path Q_NETWORK_PATH] [--verbose]
+```
+
+All arguments are optional. If not provided, the default values will be used. The common default values are:
+
+- `TRACK_NAME`: `zengarden`
+- `NUM_EPISODES`: `1`
+- `MAX_FRAMES`: `1000`
+- `MODE`: `train`
+
+To get the animation of the kart, run the scripts with `--verbose` flag.
+
+Example training commands:
+
+```bash
+python simple_RL_controller.py --track zengarden --mode train --episodes 3000 --max_frames 2000 ;
+python discrete_RL_controller.py --track zengarden --mode train --episodes 3000 --max_frames 2000 ;
+python DQN.py --track zengarden --mode train --episodes 5000 --max_frames 2000 ;
+python neural_RL_controller.py --track zengarden --mode train --episodes 5000 --max_frames 2000 ;
+```
+
+## Scripts for testing
+
+### Simple RL Controller
 
 ```bash
 python simple_RL_controller.py --track zengarden --mode test --q_table_path trained_models/zengarden/simple_qtable_ep2910.npy --verbose ;
@@ -11,14 +57,15 @@ python simple_RL_controller.py --track cornfield_crossing --mode test --q_table_
 python simple_RL_controller.py --track scotland --mode test --q_table_path trained_models/scotland/simple_qtable_ep2910.npy --verbose ;
 ```
 
-zengarden: 477 steps
-lighthouse: 501 steps
-hacienda: 550 steps
-snowtuxpeak: 611 steps
-cornfield_crossing: 693 steps
-scotland: 660 steps
+Results:
+- zengarden: 477 steps
+- lighthouse: 501 steps
+- hacienda: 550 steps
+- snowtuxpeak: 611 steps
+- cornfield_crossing: 693 steps
+- scotland: 660 steps
 
-## Discrete RL Controller
+### Discrete RL Controller
 
 ```bash
 python discrete_RL_controller.py --track zengarden --mode test --q_table_path trained_models/zengarden/discrete_qtable_ep3000.npy --verbose ;
@@ -29,14 +76,15 @@ python discrete_RL_controller.py --track cornfield_crossing --mode test --q_tabl
 python discrete_RL_controller.py --track scotland --mode test --q_table_path trained_models/scotland/discrete_qtable_ep3000.npy --verbose ;
 ```
 
-zengarden: 630 steps
-lighthouse: 577 steps
-hacienda: 779 steps (gets stuck)
-snowtuxpeak: 788 steps
-cornfield_crossing: 837 steps
-scotland: 730 steps
+Results:
+- zengarden: 630 steps
+- lighthouse: 577 steps
+- hacienda: 779 steps (gets stuck)
+- snowtuxpeak: 788 steps
+- cornfield_crossing: 837 steps
+- scotland: 730 steps
 
-## DQN
+### DQN
 
 ```bash
 python DQN.py --track zengarden --mode test --verbose ;
@@ -46,7 +94,9 @@ python DQN.py --track hacienda --mode test --verbose ;
 
 
 
-## controller test
+### Controller test
+
+To get the animation of the kart, run the script with `-v` flag.
 
 ```bash
 python controller.py zengarden lighthouse hacienda snowtuxpeak cornfield_crossing scotland

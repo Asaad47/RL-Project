@@ -1,10 +1,7 @@
 import numpy as np
 import random
 import pystk
-from PIL import Image
 import matplotlib.pyplot as plt
-from planner import load_model
-import torchvision.transforms.functional as TF
 import pandas as pd
 
 # Constants
@@ -14,7 +11,6 @@ GAMMA = 0.99
 LEARNING_RATE = 0.1  # Alpha for Q-learning
 EPSILON_START = 1.0
 EPSILON_END = 0.1
-EPSILON_DECAY = 50000
 
 # Action space
 STEER_VALUES = [0, -1, 1]  # 3 values
@@ -23,41 +19,17 @@ BRAKE_VALUES = [False, True]  # 2 values
 DRIFT_VALUES = [False, True]  # 2 values
 NITRO_VALUES = [True, False]  # 2 values
 
-# Total number of actions: 3 * 3 * 2 * 2 * 2 = 72
-# NUM_ACTIONS = len(STEER_VALUES) * len(ACCEL_VALUES) * len(BRAKE_VALUES) * len(DRIFT_VALUES) * len(NITRO_VALUES)
+# Total number of actions: 3
 NUM_ACTIONS = len(STEER_VALUES)
 
 # State discretization
 IMG_WIDTH = 128
 IMG_HEIGHT = 96
-VELOCITY_BINS = 30  # Number of bins for velocity
 
 MAX_SAME_POSITION_COUNT = 60
 
 def get_action_from_index(action_idx):
     """Convert a single action index to the corresponding action tuple"""
-    # nitro_idx = action_idx % len(NITRO_VALUES)
-    # action_idx = action_idx // len(NITRO_VALUES)
-    
-    # drift_idx = action_idx % len(DRIFT_VALUES)
-    # action_idx = action_idx // len(DRIFT_VALUES)
-    
-    # brake_idx = action_idx % len(BRAKE_VALUES)
-    # action_idx = action_idx // len(BRAKE_VALUES)
-    
-    # accel_idx = action_idx % len(ACCEL_VALUES)
-    # action_idx = action_idx // len(ACCEL_VALUES)
-    
-    # steer_idx = action_idx % len(STEER_VALUES)
-    
-    # return {
-    #     'steer': STEER_VALUES[steer_idx],
-    #     'acceleration': ACCEL_VALUES[accel_idx],
-    #     'brake': BRAKE_VALUES[brake_idx],
-    #     'drift': DRIFT_VALUES[drift_idx],
-    #     'nitro': NITRO_VALUES[nitro_idx]
-    # }
-    
     steer_idx = action_idx % len(STEER_VALUES)
     
     return {
@@ -131,12 +103,6 @@ class PyTux:
         # Ensure coordinates are within image boundaries
         x = np.clip(x, 0, IMG_WIDTH - 1)
         
-        velocity = np.linalg.norm(kart.velocity)
-        velocity_bin = min(int(velocity), VELOCITY_BINS - 1)  # cap at VELOCITY_BINS
-        # distance_down_track = kart.distance_down_track / track.length * 100
-        # prev_distance_down_track = self.prev_distance_down_track / track.length * 100
-        
-        # return (*aim_point_image, int(velocity), int(distance_down_track), int(prev_distance_down_track))
         return (x,)
 
 
@@ -159,13 +125,11 @@ class PyTux:
         track = pystk.Track()
         track.update()
         
-        # return np.array(self.k.render_data[0].image), None
         return state, track
     
     def get_reward(self, discrete_state, action):
         
         x = discrete_state[0]
-        # velocity = discrete_state[1]
         
         reward = 0
         
@@ -178,20 +142,14 @@ class PyTux:
 
         if action.rescue:
             reward -= 1
-        # elif velocity < 5:
-        #     reward -= 0.5
-        # else:
-        #     reward += 1
         
         return reward
 
     def step(self, action, t, last_rescue, discrete_state):
         if isinstance(action, int) or isinstance(action, np.int64):
-            # Convert action index to action dictionary
             action_dict = get_action_from_index(action)
             action = create_action(action_dict)
         elif isinstance(action, dict):
-            # Convert action dictionary to pystk.Action
             action = create_action(action)
             
         # get reward from discrete state
@@ -214,8 +172,6 @@ class PyTux:
         
         self.prev_distance_down_track = kart.distance_down_track
         
-        # print(f"t: {t}, kart.distance_down_track: {kart.distance_down_track}, current_vel: {current_vel}")
-        
         # Check if kart needs rescue
         if current_vel < 1.0 and t - last_rescue > RESCUE_TIMEOUT:
             last_rescue = t
@@ -228,8 +184,6 @@ class PyTux:
             # print(f">>> finished, t: {t}")
             reward += 10
         
-        # reward += kart.distance_down_track / track.length
-        # return np.array(self.k.render_data[0].image), reward, done, last_rescue
         return state, track, reward, done, last_rescue
 
     def close(self):
@@ -245,7 +199,7 @@ class PyTux:
 class Agent:
     def __init__(self, q_table_path=None):
         # Initialize Q-table with zeros
-        # Shape: (img_width, img_height, velocity_bins, num_actions)
+        # Shape: (img_width, num_actions)
         self.q_table = np.zeros((IMG_WIDTH, NUM_ACTIONS))
         self.frame_idx = 0
         
@@ -282,7 +236,6 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
     print(f"track: {track}, mode: {mode}")
     env = PyTux(mode)
     agent = Agent(q_table_path)
-    # planner = load_model().eval()
     
     q_min = []
     q_max = []
@@ -313,9 +266,6 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
             action_idx = agent.act(discrete_state, epsilon)
             state, track_obj, reward, done, last_rescue = env.step(action_idx, step, last_rescue, discrete_state)
             next_discrete_state = env.get_discrete_state(state, track_obj)
-            
-            # if env.same_position_count > MAX_SAME_POSITION_COUNT / 2:
-            #     reward -= 2
             
             if mode == 'train':
                 loss = agent.learn(discrete_state, action_idx, reward, next_discrete_state, done)

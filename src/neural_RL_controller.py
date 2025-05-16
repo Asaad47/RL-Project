@@ -3,6 +3,9 @@ import pandas as pd
 import random
 import pystk
 import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 
 # Constants
@@ -52,6 +55,7 @@ def get_action_from_index(action_idx):
         'drift': DRIFT_VALUES[drift_idx],
         'nitro': NITRO_VALUES[nitro_idx]
     }
+
 
 def create_action(action_dict):
     """Create a pystk.Action object from an action dictionary"""
@@ -165,9 +169,11 @@ class PyTux:
 
     def step(self, action, t, last_rescue, discrete_state):
         if isinstance(action, int) or isinstance(action, np.int64):
+            # Convert action index to action dictionary
             action_dict = get_action_from_index(action)
             action = create_action(action_dict)
         elif isinstance(action, dict):
+            # Convert action dictionary to pystk.Action
             action = create_action(action)
             
         # get reward from discrete state
@@ -187,8 +193,11 @@ class PyTux:
             self.same_position_count += 1
         else:
             self.same_position_count = 0
+            reward += 0.01
         
         self.prev_distance_down_track = kart.distance_down_track
+        
+        # print(f"t: {t}, kart.distance_down_track: {kart.distance_down_track}, current_vel: {current_vel}")
         
         # Check if kart needs rescue
         if current_vel < 1.0 and t - last_rescue > RESCUE_TIMEOUT:
@@ -201,7 +210,7 @@ class PyTux:
         if done:
             # print(f"!!>>> finished, t: {t}")
             reward += np.max([10 - (t / 100), 0.1])
-        
+
         return state, track, reward, done, last_rescue
 
     def close(self):
@@ -214,59 +223,141 @@ class PyTux:
         pystk.clean()
 
 # ===== Agent =====
-class Agent:
-    def __init__(self, q_table_path=None):
-        # Initialize Q-table with zeros
-        # Shape: (img_width, percent_of_track, num_actions)
-        self.q_table = np.zeros((IMG_WIDTH, 100, NUM_ACTIONS))
-        self.frame_idx = 0
-        
-        if q_table_path is not None:
-            self.load_q_table(q_table_path)
-        
-    def load_q_table(self, path):
-        self.q_table = np.load(path)
+class QNetwork(nn.Module):
+    def __init__(self, input_dim=2, hidden_dim=64, output_dim=NUM_ACTIONS):
+        super(QNetwork, self).__init__()
+        self.network = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, output_dim)
+        )
+    
+    def forward(self, x):
+        return self.network(x)
 
+class ReplayBuffer:
+    def __init__(self, capacity=10000):
+        self.capacity = capacity
+        self.buffer = []
+        self.position = 0
+    
+    def push(self, state, action, reward, next_state, done):
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(None)
+        self.buffer[self.position] = (state, action, reward, next_state, done)
+        self.position = (self.position + 1) % self.capacity
+    
+    def sample(self, batch_size):
+        batch = random.sample(self.buffer, min(batch_size, len(self.buffer)))
+        state, action, reward, next_state, done = zip(*batch)
+        return (torch.FloatTensor(state), 
+                torch.LongTensor(action), 
+                torch.FloatTensor(reward), 
+                torch.FloatTensor(next_state), 
+                torch.FloatTensor(done))
+    
+    def __len__(self):
+        return len(self.buffer)
+
+class NeuralAgent:
+    def __init__(self, device=None, q_network_path=None):
+        if device is None:
+            if torch.cuda.is_available():
+                self.device = 'cuda'
+            elif torch.backends.mps.is_available():
+                self.device = 'mps'
+            else:
+                self.device = 'cpu'
+        else:
+            self.device = device
+        self.q_network = QNetwork().to(self.device)
+        self.target_network = QNetwork().to(self.device)
+        self.target_network.load_state_dict(self.q_network.state_dict())
+        self.optimizer = optim.Adam(self.q_network.parameters(), lr=LEARNING_RATE)
+        self.replay_buffer = ReplayBuffer()
+        self.frame_idx = 0
+        self.batch_size = 64
+        self.target_update = 10  # Update target network every 10 frames
+        
+        if q_network_path is not None:
+            self.load_q_network(q_network_path)
+    
+    def load_q_network(self, path):
+        self.q_network.load_state_dict(torch.load(path, map_location=self.device))
+        self.target_network.load_state_dict(self.q_network.state_dict())
+    
     def get_epsilon(self):
         return max(EPSILON_END + (EPSILON_START - EPSILON_END) * (1 - self.frame_idx / 1000), 0.1)
-        # return 0.1
-
+    
     def act(self, state, epsilon=None):
         if epsilon is None:
             epsilon = self.get_epsilon()
+        
         if random.random() < epsilon:
             return random.randrange(NUM_ACTIONS)
-        return np.argmax(self.q_table[state])
-
+        
+        with torch.no_grad():
+            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+            q_values = self.q_network(state_tensor)
+            return q_values.argmax().item()
+    
     def learn(self, state, action, reward, next_state, done):
         self.frame_idx += 1
         
-        # Q-learning update
-        current_q = self.q_table[state][action]
-        next_q = np.max(self.q_table[next_state]) if not done else 0
-        target_q = reward + GAMMA * next_q
+        # Store transition in replay buffer
+        self.replay_buffer.push(state, action, reward, next_state, done)
         
-        # Update Q-value
-        self.q_table[state][action] += LEARNING_RATE * (target_q - current_q)
+        # Only learn if we have enough samples
+        if len(self.replay_buffer) < self.batch_size:
+            return 0.0
         
-        return abs(target_q - current_q)  # Return TD error as loss
+        # Sample from replay buffer
+        states, actions, rewards, next_states, dones = self.replay_buffer.sample(self.batch_size)
+        states = states.to(self.device)
+        actions = actions.to(self.device)
+        rewards = rewards.to(self.device)
+        next_states = next_states.to(self.device)
+        dones = dones.to(self.device)
+        
+        # Compute current Q values
+        current_q_values = self.q_network(states).gather(1, actions.unsqueeze(1))
+        
+        # Compute target Q values
+        with torch.no_grad():
+            next_q_values = self.target_network(next_states).max(1)[0]
+            target_q_values = rewards + (1 - dones) * GAMMA * next_q_values
+        
+        # Compute loss and update
+        loss = nn.MSELoss()(current_q_values.squeeze(), target_q_values)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        
+        # Update target network periodically
+        if self.frame_idx % self.target_update == 0:
+            self.target_network.load_state_dict(self.q_network.state_dict())
+        
+        return loss.item()
 
-def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode='train', q_table_path=None):
+def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode='train', q_network_path=None):
     print(f"track: {track}, mode: {mode}")
     env = PyTux(mode)
-    agent = Agent(q_table_path)
+    agent = NeuralAgent(q_network_path=q_network_path) if mode == 'train' else NeuralAgent(q_network_path=q_network_path)
     
     q_min = []
     q_max = []
     q_mean = []
     num_steps = []
     cumulative_rewards = []
+    cumulative_losses = []
     finished_status = []
     
     if mode == 'train':
         epsilon = None
     else:
-        epsilon = 0.0 # no exploration in test mode
+        epsilon = 0.0  # no exploration in test mode
     
     if verbose:
         plt.ion()
@@ -281,7 +372,6 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
         kill_episode = False
         
         for step in range(max_frames):
-            
             action_idx = agent.act(discrete_state, epsilon)
             state, track_obj, reward, done, last_rescue = env.step(action_idx, step, last_rescue, discrete_state)
             next_discrete_state = env.get_discrete_state(state, track_obj)
@@ -289,7 +379,6 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
             if mode == 'train':
                 loss = agent.learn(discrete_state, action_idx, reward, next_discrete_state, done)
                 cumulative_loss += loss
-            
             discrete_state = next_discrete_state
             episode_reward += reward
             
@@ -310,7 +399,6 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
             
             if not verbose and env.same_position_count > MAX_SAME_POSITION_COUNT:
                 kill_episode = True
-                # print(f">> same position for {env.same_position_count} frames. Killed after {step + 1} steps")
                 env.prev_distance_down_track = 0
                 env.same_position_count = 0
             
@@ -318,22 +406,21 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
                 break
         
         if mode == 'train':
-            pass
-            # print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Loss = {cumulative_loss:.4f}, distance_down_track: {int(100 * state.players[0].kart.distance_down_track / track_obj.length)}%")
+            print(f"Episode {episode + 1}: Reward = {episode_reward:.2f}, Loss = {cumulative_loss:.4f}, distance_down_track: {state.players[0].kart.distance_down_track / track_obj.length:.2f}")
         else:
-            print(f"Reward = {episode_reward:.2f}, steps: {step + 1}, distance_down_track: {int(100 * state.players[0].kart.distance_down_track / track_obj.length)}%")
+            print(f"Reward = {episode_reward:.2f}, steps: {step + 1}, distance_down_track: {state.players[0].kart.distance_down_track / track_obj.length:.2f}")
+            print(f"overall_distance percent: {state.players[0].kart.overall_distance / track_obj.length:.2f}")
         
-        # Save Q-table periodically
+        # Save Q-network periodically
         if mode == 'train' and (episode + 1) % 10 == 0:
-            np.save(f'trained_models/{track}/discrete_qtable_ep{episode+1}.npy', agent.q_table)
-            print(f"Q-table saved at episode {episode + 1}")
-            q_min.append(np.min(agent.q_table))
-            q_max.append(np.max(agent.q_table))
-            q_mean.append(np.mean(agent.q_table))
+            torch.save(agent.q_network.state_dict(), f'trained_models/{track}/neural_qnetwork_ep{episode+1}.pt')
+            q_min.append(np.min(agent.q_network(torch.FloatTensor([[0, 0]]).to(agent.device)).detach().cpu().numpy()))
+            q_max.append(np.max(agent.q_network(torch.FloatTensor([[0, 0]]).to(agent.device)).detach().cpu().numpy()))
+            q_mean.append(np.mean(agent.q_network(torch.FloatTensor([[0, 0]]).to(agent.device)).detach().cpu().numpy()))
             num_steps.append(step + 1)
             cumulative_rewards.append(episode_reward)
             finished_status.append(done)
-    
+            cumulative_losses.append(cumulative_loss)
     if mode == 'train':
         df = pd.DataFrame({
             'q_min': q_min,
@@ -341,9 +428,10 @@ def run(track="zengarden", num_episodes=100, max_frames=1000, verbose=True, mode
             'q_mean': q_mean,
             'num_steps': num_steps,
             'cumulative_rewards': cumulative_rewards,
+            'cumulative_losses': cumulative_losses,
             'finished_status': finished_status
         })
-        df.to_csv(f'trained_models/{track}/discrete_qstats.csv', index=False)
+        df.to_csv(f'trained_models/{track}/neural_qstats.csv', index=False)
     
     if verbose:
         plt.close()
@@ -363,8 +451,8 @@ if __name__ == '__main__':
                       help='Show verbose output during training')
     parser.add_argument('--mode', type=str, default='train',
                       help='Mode to run the script in')
-    parser.add_argument('--q_table_path', type=str, default=None,
-                      help='Path to the Q-table file')
+    parser.add_argument('--q_network_path', type=str, default=None,
+                      help='Path to the Q-network file')
     
     args = parser.parse_args()
-    run(args.track, args.episodes, args.max_frames, args.verbose, args.mode, args.q_table_path)
+    run(args.track, args.episodes, args.max_frames, args.verbose, args.mode, args.q_network_path)

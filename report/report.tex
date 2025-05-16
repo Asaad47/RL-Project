@@ -360,12 +360,49 @@ When testing the Q-learning agents locally after training on Ibex, the results a
 
 Table \ref{local_vs_ibex} shows the performance comparison between local and Ibex tests. The better performance results alternate between local and Ibex results. In the case of the simple Q-learning agent, the local agent was better in Zengarden, Hacienda, and Cornfield\_crossing tracks, and the Ibex agent was better in Lighthouse ans Snowtuxpeak while performing similar in Scotland track. Similar alternating results are observed for the discrete Q-learning agent. This suggests that the computations handled in my local machine and Ibex differ. 
 
+\subsubsection{Function Approximation}
+
+Per the presentation comments, I implemented a simple function approximation model in \texttt{neural\_RL\_controller.py}. The model is a simple feedforward neural network with 3 layers:
+
+\begin{itemize}
+    \item Input layer: The input layer takes a state similar to the discrete Q-learning agent as input.
+    \item Hidden layer: The hidden layer has 64 units.
+    \item Output layer: The output layer has 72 units.
+\end{itemize}
+
+The model approximates the Q-value function for the action space of the discrete Q-learning agent. In addition, a memory buffer is used to store the experiences of the agent and provide samples for training, and the reward function has been modified to include a reward of $0.01$ for each time the kart's distance down the track gets larger. However, the model does not show any improvements, and, in fact, the model does not even finish the race in the Zengarden track. Figure \ref{approx_reward} shows the cumulative reward of the function approximation model during training on the Zengarden track. The rewards are in the negative range, indicating that the model does not make any progress.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.9\textwidth]{approx_reward.png}
+    \caption{Cumulative reward of function approximation model on Zengarden track (5000 episodes)}
+    \label{approx_reward}
+\end{figure}
+
+
 \subsection{DQN}
 Similar to the training setup of Q-learning, DQN is trained with a maximum of 2000 steps per episode and an $\epsilon$-greedy policy is used for exploration. Images are loaded with the \texttt{hd()} resolution to reflect the actual game. However, even after training for 5000 episodes, the DQN agent does not reach the finish line in any run and all cumulative rewards reported are negative, which indicates that the DQN agent is not able to learn the game and gets stuck in a loop.
+
+Figure \ref{DQN_reward} shows the normalized reward per step of DQN agent on all tracks. The reward is scaled by the number of steps taken in the episode. The majority of the rewards are in the negative range, indicating that the DQN agent gets stuck and does not make any progress. Figure \ref{DQN_loss} shows the normalized loss per step of DQN agent on all tracks. The loss is scaled by the number of steps taken in the episode. The loss figure shows different behavior for different tracks. For example, the normalized loss of Lighthouse and Cornfield\_crossing tracks are similar, where the loss fluctuates around 0.007 within the range of 0.002 to 0.012. However, the loss Zengarden, Snowtuxpeak, and Scotland tracks are much higher and experiencing more fluctuations in larger ranges with many spikes. Nonetheless, none of the episodes have finished the race during training and the DQN agent is not able to learn the game.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.9\textwidth]{reward.png}
+    \caption{Normalized reward per step of DQN agent training on all tracks}
+    \label{DQN_reward}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.9\textwidth]{loss.png}
+    \caption{Normalized loss per step of DQN agent training on all tracks}
+    \label{DQN_loss}
+\end{figure}
 
 
 \section{Conclusion}
 
+In this project, I implemented a simple Q-learning agent, a discrete Q-learning agent, a function approximation model, and a DQN agent. The simple Q-learning agent is able to finish the race in all tracks, and the discrete Q-learning agent is able to finish the race in all tracks except for Hacienda and Scotland tracks. The function approximation model does not show any improvements, and the DQN agent is not able to learn the game and gets stuck in a loop. The simple Q-learning agent does not defeat the homework target performance in Zengarden and Cornfield\_crossing tracks. The discrete Q-learning agent is able to defeat the simple Q-learning agent in Zengarden but fails to defeat the homework target performance in all other tracks. For the DQN agent, some hyperparameters tuning have been done, but the model needs further tuning to learn the game. Further, the reward function needs to be tuned to encourage the kart to move forward and finish the race, but this was not successfully done in this project.
 
 
 \begin{thebibliography}{2}
@@ -384,6 +421,7 @@ Orabona, F. (2025) CS294X: Introduction to Reinforcement Learning Lecture Notes.
 
 \end{thebibliography}
 
+
 \appendix
 
 \section{Q-learning Plots}
@@ -391,14 +429,14 @@ Orabona, F. (2025) CS294X: Introduction to Reinforcement Learning Lecture Notes.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{simple_RL_controller_reward_distance.png}
+    \includegraphics[width=0.9\textwidth]{simple_RL_controller_reward_distance.png}
     \caption{Reward distance of simple Q-learning agent on all tracks}
     \label{simple_RL_controller_reward_distance}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{simple_RL_controller_steps_only.png}
+    \includegraphics[width=0.9\textwidth]{simple_RL_controller_steps_only.png}
     \caption{Steps taken of simple Q-learning agent on all tracks}
     \label{simple_RL_controller_steps_only}
 \end{figure}
@@ -406,14 +444,14 @@ Orabona, F. (2025) CS294X: Introduction to Reinforcement Learning Lecture Notes.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{discrete_RL_controller_reward_distance.png}
+    \includegraphics[width=0.9\textwidth]{discrete_RL_controller_reward_distance.png}
     \caption{Reward distance of discrete Q-learning agent on all tracks}
     \label{discrete_RL_controller_reward_distance}
 \end{figure}
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\textwidth]{discrete_RL_controller_steps_only.png}
+    \includegraphics[width=0.9\textwidth]{discrete_RL_controller_steps_only.png}
     \caption{Steps taken of discrete Q-learning agent on all tracks}
     \label{discrete_RL_controller_steps_only}
 \end{figure}
