@@ -7,7 +7,7 @@ trained_models/
 drive_data/
 Styles/
 *.pdf
-!report/report.pdf
+report/*.png
 
 *.aux
 *.fdb_latexmk
