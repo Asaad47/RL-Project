@@ -14,40 +14,13 @@ def control(aim_point, current_vel, steer_gain=6, skid_thresh=0.2, target_vel=30
     #this seems to initialize an object
     action = pystk.Action()
 
-   
- 
-    #compute steering
-    action.steer = np.clip(10 * aim_point[0], -1, 1)
-    # action.steer = 1 if aim_point[0] > 0 else -1 if aim_point[0] < 0 else 0
-
-    #compute acceleration
-    if abs(aim_point[0]) < 1 - skid_thresh:
-        action.acceleration = np.clip((target_vel - current_vel)/10, 0, 1)
-    else:
-        action.acceleration = 0.1  # slow down in steep turns
-    
-    #compute brake
-    if abs(aim_point[0]) > 1 - skid_thresh:
-        action.brake = True
-    else:
-        action.brake = False
-        
-    #compute drift
-    if abs(aim_point[0]) > 1 - skid_thresh:
-        action.drift = True
-    else:
-        action.drift = False
-    
-    #compute nitro
-    if abs(aim_point[0]) <= skid_thresh:
-        action.nitro = True
-    else:
-        action.nitro = False
+    action.steer = 1 if aim_point[0] > 0 else -1 if aim_point[0] < 0 else 0
+    action.acceleration = 0.8
+    action.nitro = False
+    action.drift = False
+    action.brake = False
 
     return action
-
-    
-
 
 
 

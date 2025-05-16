@@ -130,7 +130,7 @@ class PyTux:
 # Hyperparameters
 GAMMA = 0.99
 LEARNING_RATE = 0.0025
-MEMORY_SIZE = 100_000
+MEMORY_SIZE = 1000
 BATCH_SIZE = 32
 TARGET_UPDATE = 1000
 EPSILON_START = 1.0
@@ -378,7 +378,7 @@ if __name__ == "__main__":
                       help='Track to train/test on')
     parser.add_argument('--mode', type=str, default='train', choices=['train', 'test'],
                       help='Mode: train or test')
-    parser.add_argument('--model_path', type=str, default='trained_models/dqn_model.pth',
+    parser.add_argument('--model_path', type=str, default=None,
                       help='Path to save/load the model')
     parser.add_argument('--episodes', type=int, default=1,
                       help='Number of episodes for training')
@@ -398,6 +398,9 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
     print("device: ", device)
+    
+    if args.model_path is None:
+        args.model_path = f"trained_models/{args.track}/dqn_model.pth" 
 
     run(track=args.track, 
         device=device, 
