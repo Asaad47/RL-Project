@@ -33,6 +33,7 @@
 \usepackage{microtype}      % microtypography
 \usepackage{xcolor}         % colors
 \usepackage{amsmath}        % math
+\usepackage{graphicx}
 
 % Define todo command
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
@@ -116,7 +117,7 @@ I will discuss the results in the experiments section.
 The game is a 3D racing game where the goal is to navigate a kart through the track 
 while avoiding obstacles. The game is played from a third-person perspective.
 
-The game documentation provides multiple settings for the image quality through the \texttt{pystk.GraphicsConfig}
+The game documentation \citep{pystk} provides multiple settings for the image quality through the \texttt{pystk.GraphicsConfig}
 class. The available settings are:
 
 \begin{itemize}
@@ -126,11 +127,16 @@ class. The available settings are:
     \item \texttt{none()}: "Disable graphics and rendering"
 \end{itemize}
 
-\todo{add citation of game documentation}
 
-\todo{add different quality images of the game}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{resolution.png}
+    \caption{Different resolutions of the game. From left to right: \texttt{hd()}, \texttt{sd()}, \texttt{ld()}}
+    \label{resolution}
+\end{figure}
 
-To speed up the training, I used the \texttt{ld()} setting during training, and the \texttt{hd()} setting during testing for the Q-learning agent. 
+
+Figure \ref{resolution} shows the different resolutions of the game. To speed up the training, I used the \texttt{ld()} setting during training, and the \texttt{hd()} setting during testing for the Q-learning agent. 
 I avoided using the \texttt{none()} setting because as the game is not rendered, training shows incorrect results. However, I used the \texttt{hd()} setting
 for the DQN agent because the training needs to be exposed to the high quality images reflecting the actual game.
 
@@ -236,13 +242,136 @@ It has been observed that the kart can get stuck in a position where it cannot m
 
 \section{DQN}
 
+The implementation of Deep Q-learning Network (DQN) is based on the Atari papers \citep{mnih, mnih2}. A convolutional neural network (CNN) is used to approximate the Q-value function, where the output is a vector with the same size as the action space. The Atari paper \citep{mnih} had a an action space of 4 to 18 actions, which is smaller than the 72 actions in our case.
+
+The update is implemented similar to the Atari paper \citep{mnih}, where the target network is updated every 1000 steps.
+
+\paragraph{State space}
+
+A state is a stack of 4 consecutive grayscale frames of the game, which is the same as the Atari paper. A state then would be a tensor of shape $(4, 128, 96)$.
+
+\paragraph{Action space}
+
+The action space is similar to the discrete Q-learning agent, where the action space is a tuple of five values: $(\texttt{steer}, \texttt{accel}, \texttt{brake}, \texttt{drift}, \texttt{nitro})$, with a total of 72 actions.
+
+\begin{itemize}
+    \item \texttt{steer}  $\in \{-1, 0, 1\}$
+    \item \texttt{accel} $\in \{1.0, 0.5, 0.05\}$
+    \item \texttt{brake} $\in \{False, True\}$
+    \item \texttt{drift} $\in \{False, True\}$
+    \item \texttt{nitro} $\in \{False, True\}$
+\end{itemize}
+
+\paragraph{Reward function}
+
+The reward function has also three components: \texttt{reward\_move}, \texttt{reward\_rescue}, and \texttt{reward\_done}. The reward function is the sum of the three components.
+
+\texttt{reward\_move} is $-0.5$ if the kart hasn't moved forward or has a low velocity, and $0$ otherwise.
+    
+\texttt{reward\_rescue} and \texttt{reward\_done} are defined as previously in the discrete Q-learning agent.
+
+\subsection{Implementation details}
+
+Similar neural network architecture is used as the Atari paper \citep{mnih}. The network has 3 convolutional layers with 32, 64, and 64 filters respectively followed by a dense linear layer with 512 units and a final linear layer with 72 outputs. The network is trained using the RMSprop optimizer with a learning rate of 0.0025.
+
+The hyperparameters of interest are:
+\begin{itemize}
+    \item \texttt{GAMMA}: The discount factor, which is 0.99.
+    \item \texttt{MEMORY\_SIZE}: The size of the replay buffer, which is 1000. It lead to out of memory error when I set it to 100000.
+    \item \texttt{BATCH\_SIZE}: The batch size, which is 32.
+    \item \texttt{TARGET\_UPDATE}: The number of steps between updating the target network, which is 1000.
+    \item \texttt{frame\_skip = k}: The number of frames to skip between actions, which is 4.
+\end{itemize}
+
+Similar to the Q-learning agent implementation, an $\epsilon$-greedy policy is used to balance exploration and exploitation during training. Also, an episode is terminated if the kart is stuck for more than 60 steps.
+
 \section{Experiments}
+
+\subsection{Q-learning}
+
+Both Q-learning agents are trained for 3000 episodes with a maximum of 2000 steps per episode. During training, an $\epsilon$-greedy policy is used for exploration and images are loaded with the \texttt{ld()} resolution. Each agent is trained on each track seperately and tested on the same track. Every 10 episodes, the Q-table is saved to the disk for later use. In the case of the discrete Q-learning agent, the training approach tries to memorize the track as it progresses, which is motivated by how human players perform when playing the game repeatedly.
+
+In testing, the \texttt{hd()} resolution is used for visualization. $\epsilon$ is set to 0 for deterministic policy. To extract the best performance of each method, last 10 saved Q-tables from episodes 2910 to 3000 are used for each track, and the best performance is selected as shown in Table \ref{best_performance}. Plot figures of the last saved episodes are shown in Appendix \ref{qlearning_plots}.
+
+
+\begin{table}[h]
+    \caption{Best Steps taken performance of each method on each track}
+    \label{best_performance}
+    \centering
+    \begin{tabular}{llll}
+        \toprule
+        Method              & Zengarden    & Lighthouse      & Hacienda  \\
+        \midrule
+        Simple Q-learning   & 547          & \textbf{491}    & \textbf{567}  \\
+        Discrete Q-learning & \textbf{528} & 595             & 806 (95\%)  \\
+        Manual Controller   & 631          & 503             & 649  \\
+        HW Target & \underline{500}        & \underline{500} & \underline{700}  \\
+        \bottomrule
+        \toprule
+        Method              & Snowtuxpeak  & Cornfield\_crossing & Scotland  \\
+        \midrule
+        Simple Q-learning   & \textbf{518} & \textbf{711}    & \textbf{660}  \\
+        Discrete Q-learning & 782          & 842             & 771 (90\%)  \\
+        Manual Controller   & 632          & 764             & 696  \\
+        HW Target & \underline{600}        & \underline{700} & \underline{700}  \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+
+Table \ref{best_performance} compares the best performance of Q-learning agents against a manually pre-defined controller and the target performance given by the homework assignment. The manual controller is set with the follwing pre-defined policy:
+
+\begin{itemize}
+    \item \texttt{steer} = 1 if $x$ > 0, else -1 if $x$ < 0, else 0
+    \item (\texttt{accel}, \texttt{brake}, \texttt{drift}, \texttt{nitro}) = (0.8, False, False, False)
+\end{itemize}
+
+where $x$ is the x-coordinate of the aim point ranging from -1 to 1.
+
+From the table, we can see that the simple Q-learning agent performs better than the manual controller and the discrete Q-learning agent as well. Except for the Zengarden track, the discrete Q-learning agent performs better than the simple Q-learning agent. However, the simple Q-learning agent does not defeat the homework target performance in Zengarden and Cornfield\_crossing tracks. The discrete Q-learning agent is able to defeat the simple Q-learning agent in Zengarden but fails to finish the race in Hacienda and Scotland tracks.
+
+\subsubsection{Local vs Ibex}
+
+When testing the Q-learning agents locally after training on Ibex, the results are a little bi different. For example, the discrete Q-learning agent is able to finish the race in Scotland track locally but not on Ibex. 
+
+\begin{table}[h]
+    \caption{Performance comparison between local and Ibex}
+    \label{local_vs_ibex}
+    \centering
+    \begin{tabular}{llll}
+        \toprule
+        Method              & Zengarden    & Lighthouse      & Hacienda  \\
+        \midrule
+        Ibex Simple Q-learning   & 547          & \textbf{491} & 567  \\
+        Ibex Discrete Q-learning & 528          & 595          & 806 (95\%)  \\
+        Local Simple Q-learning   & \textbf{477} & 501         & \textbf{550}  \\
+        Local Discrete Q-learning & 630         & 577          & 779 (gets stuck)  \\
+        \bottomrule
+        \toprule
+        Method              & Snowtuxpeak  & Cornfield\_crossing & Scotland  \\
+        \midrule
+        Ibex Simple Q-learning   & \textbf{518} & 711    & \textbf{660}  \\
+        Ibex Discrete Q-learning & 782          & 842             & 771 (90\%)  \\
+        Local Simple Q-learning   & 611          & \textbf{693}   & \textbf{660}  \\
+        Local Discrete Q-learning & 788          & 837             & 730  \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Table \ref{local_vs_ibex} shows the performance comparison between local and Ibex tests. The better performance results alternate between local and Ibex results. In the case of the simple Q-learning agent, the local agent was better in Zengarden, Hacienda, and Cornfield\_crossing tracks, and the Ibex agent was better in Lighthouse ans Snowtuxpeak while performing similar in Scotland track. Similar alternating results are observed for the discrete Q-learning agent. This suggests that the computations handled in my local machine and Ibex differ. 
+
+\subsection{DQN}
+Similar to the training setup of Q-learning, DQN is trained with a maximum of 2000 steps per episode and an $\epsilon$-greedy policy is used for exploration. Images are loaded with the \texttt{hd()} resolution to reflect the actual game. However, even after training for 5000 episodes, the DQN agent does not reach the finish line in any run and all cumulative rewards reported are negative, which indicates that the DQN agent is not able to learn the game and gets stuck in a loop.
+
 
 \section{Conclusion}
 
-\section*{References}
+
 
 \begin{thebibliography}{2}
+
+\bibitem[Krähenbühl(2021)]{pystk}
+Krähenbühl, P. (2021). pystk Documentation (Version 1.0) [Computer software documentation]. Retrieved from https://readthedocs.org/projects/pystk/downloads/pdf/latest/
 
 \bibitem[Mnih et al.(2013)]{mnih}
 Mnih, V., Kavukcuoglu, K., Silver, D., Graves, A., Antonoglou, I., Wierstra, D., \& Riedmiller, M. (2013) Playing Atari with Deep Reinforcement Learning. {\it arXiv preprint arXiv:1312.5602}.
@@ -255,75 +384,38 @@ Orabona, F. (2025) CS294X: Introduction to Reinforcement Learning Lecture Notes.
 
 \end{thebibliography}
 
-\pagebreak
+\appendix
 
-\subsection{Figures}
+\section{Q-learning Plots}
+\label{qlearning_plots}
 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{simple_RL_controller_reward_distance.png}
+    \caption{Reward distance of simple Q-learning agent on all tracks}
+    \label{simple_RL_controller_reward_distance}
+\end{figure}
 
-\begin{figure}
-  \centering
-  \fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
-  \caption{Sample figure caption.}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{simple_RL_controller_steps_only.png}
+    \caption{Steps taken of simple Q-learning agent on all tracks}
+    \label{simple_RL_controller_steps_only}
 \end{figure}
 
 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{discrete_RL_controller_reward_distance.png}
+    \caption{Reward distance of discrete Q-learning agent on all tracks}
+    \label{discrete_RL_controller_reward_distance}
+\end{figure}
 
-\subsection{Tables}
-
-
-All tables must be centered, neat, clean and legible.  The table number and
-title always appear before the table.  See Table~\ref{sample-table}.
-
-
-Place one line space before the table title, one line space after the
-table title, and one line space after the table. The table title must
-be lower case (except for first word and proper nouns); tables are
-numbered consecutively.
-
-
-Note that publication-quality tables \emph{do not contain vertical rules.} We
-strongly suggest the use of the \verb+booktabs+ package, which allows for
-typesetting high-quality, professional tables:
-\begin{center}
-  \url{https://www.ctan.org/pkg/booktabs}
-\end{center}
-This package was used to typeset Table~\ref{sample-table}.
-
-
-\begin{table}
-  \caption{Sample table title}
-  \label{sample-table}
-  \centering
-  \begin{tabular}{lll}
-    \toprule
-    \multicolumn{2}{c}{Part}                   \\
-    \cmidrule(r){1-2}
-    Name     & Description     & Size ($\mu$m) \\
-    \midrule
-    Dendrite & Input terminal  & $\sim$100     \\
-    Axon     & Output terminal & $\sim$10      \\
-    Soma     & Cell body       & up to $10^6$  \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-
-
-\subsection{Margins in \LaTeX{}}
-
-
-Most of the margin problems come from figures positioned by hand using
-\verb+\special+ or other commands. We suggest using the command
-\verb+\includegraphics+ from the \verb+graphicx+ package. Always specify the
-figure width as a multiple of the line width as in the example below:
-\begin{verbatim}
-   \usepackage[pdftex]{graphicx} ...
-   \includegraphics[width=0.8\linewidth]{myfile.pdf}
-\end{verbatim}
-See Section 4.4 in the graphics bundle documentation
-(\url{http://mirrors.ctan.org/macros/latex/required/graphics/grfguide.pdf})
-
-
-
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{discrete_RL_controller_steps_only.png}
+    \caption{Steps taken of discrete Q-learning agent on all tracks}
+    \label{discrete_RL_controller_steps_only}
+\end{figure}
 
 \end{document}
