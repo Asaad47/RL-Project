@@ -44,8 +44,6 @@ python DQN.py --track lighthouse --mode test --verbose ;
 python DQN.py --track hacienda --mode test --verbose ;
 ```
 
-## PPO
-
 
 
 ## controller test
